@@ -11,12 +11,15 @@ struct Arg {
     config_path: Option<PathBuf>,
     #[arg(short = 'c', long, default_value_t = true)]
     cache_layers: bool,
+    #[arg()]
+    image: String,
 }
 
 #[derive(Debug)]
 pub struct Config {
     config_path: PathBuf,
     cache_layers: bool,
+    image: String,
 }
 
 impl Config {
@@ -24,6 +27,7 @@ impl Config {
         let Arg {
             config_path,
             cache_layers,
+            image,
         } = Arg::try_parse().context("failed to parse CLI args")?;
 
         let config_path = config_path
@@ -39,6 +43,7 @@ impl Config {
         Ok(Config {
             config_path,
             cache_layers,
+            image,
         })
     }
 
@@ -54,5 +59,9 @@ impl Config {
 
     pub fn cache_layers(&self) -> bool {
         self.cache_layers
+    }
+
+    pub fn image(&self) -> &str {
+        &self.image
     }
 }
