@@ -26,19 +26,26 @@ pub struct Parser {}
 
 impl Parser {
     pub fn parse_image<R: Read + Seek>(&self, src: R) -> anyhow::Result<()> {
-        let mut archive = Archive::new(src);
         let mut headers = vec![];
 
-        let mut tar_header = [0u8; 262];
-        for entry in archive
+        let mut archive = Archive::new(src);
+        let mut entries = archive
             .entries_with_seek()
-            .context("failed to get entries from the archive")?
-        {
+            .context("failed to get entries from the archive")?;
+        let mut tar_header = [0u8; 262];
+        loop {
+            let Some(entry) = entries.next() else {
+                // No more entries
+                break;
+            };
+
             let mut entry = entry.context("error while reading an entry")?;
+
             let header = entry.header();
             headers.push(entry.header().clone());
 
-            if header.path_bytes().starts_with(b"blobs/sha256/") {
+            let entry_size = header.entry_size().context("failed to get the entry's file size")?;
+            if header.path_bytes().starts_with(b"blobs/sha256/") && entry_size != 0 {
                 // Check if blob is tar/gzipped tar
 
                 let mut filled = 0;
@@ -69,23 +76,42 @@ impl Parser {
                     break BlobType::Json;
                 };
 
-                dbg!(blob_type);
+                let mut reader = archive.into_inner();
 
-                // Restore the original entry so that it gets parsed correctly
-                let entry = tar_header[..filled].chain(entry);
+                if filled != 0 {
+                    // Restore the original entry so that it gets parsed correctly
+                    reader
+                        .seek_relative(-(filled as i64))
+                        .context("failed to wind back the reader")?;
+                }
 
                 match blob_type {
-                    BlobType::Tar => self.parse_tar_layer(entry).context("error while parsing a tar layer")?,
-                    BlobType::GzippedTar => unimplemented!("Not supported for now"),
-                    BlobType::Json => {}
+                    BlobType::Tar => self
+                        .parse_tar_layer(&mut reader)
+                        .context("error while parsing a tar layer")?,
+                    BlobType::GzippedTar => {
+                        reader
+                            .seek_relative((entry_size as i64 / 512) * 512 + 512)
+                            .context("failed to skip an entry")?;
+                    }
+                    BlobType::Json => {
+                        reader
+                            .seek_relative((entry_size as i64 / 512) * 512 + 512)
+                            .context("failed to skip an entry")?;
+                    }
                 }
+
+                archive = Archive::new(reader);
+                entries = archive
+                    .entries_with_seek()
+                    .context("failed to get entries from the archive")?;
             }
         }
 
         Ok(())
     }
 
-    fn parse_tar_layer<R: Read>(&self, src: R) -> anyhow::Result<()> {
+    fn parse_tar_layer<R: Read + Seek>(&self, src: &mut R) -> anyhow::Result<()> {
         let mut archive = Archive::new(src);
 
         let mut change_set = LayerChangeSet::new();
@@ -99,6 +125,8 @@ impl Parser {
                 })
             }
         }
+
+        dbg!(change_set);
 
         Ok(())
     }
