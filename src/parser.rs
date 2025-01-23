@@ -76,8 +76,8 @@ impl Parser {
 
                 match blob_type {
                     BlobType::Tar => self.parse_tar_layer(entry).context("error while parsing a tar layer")?,
-                    BlobType::GzippedTar => todo!(),
-                    BlobType::Json => todo!(),
+                    BlobType::GzippedTar => unimplemented!("Not supported for now"),
+                    BlobType::Json => {}
                 }
             }
         }
