@@ -8,6 +8,9 @@ license-file = "COPYING"
 anyhow = "1.0.95"
 clap = { version = "4.5.26", features = ["derive"] }
 dirs = "6.0.0"
+serde = "1.0.217"
+serde-query = "0.2.0"
+serde_json = "1.0.137"
 tar = "0.4.43"
 tokio = { version = "1.43.0", features = [
     "rt-multi-thread",
