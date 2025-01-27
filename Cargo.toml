@@ -8,8 +8,7 @@ license-file = "COPYING"
 anyhow = "1.0.95"
 clap = { version = "4.5.26", features = ["derive"] }
 dirs = "6.0.0"
-serde = "1.0.217"
-serde-query = "0.2.0"
+serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.137"
 tar = { git = "https://github.com/h33333333/tar-rs" }
 tokio = { version = "1.43.0", features = [

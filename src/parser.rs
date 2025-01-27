@@ -1,12 +1,18 @@
+use core::str;
 use std::io::{Read, Seek};
 use std::path::PathBuf;
 
 use anyhow::Context;
-use serde::de::DeserializeOwned;
-use serde_query::Deserialize;
+use serde::de::{DeserializeOwned, Visitor};
+use serde::{Deserialize, Deserializer};
 use tar::{Archive, Entry};
 
 const GZIP_MAGIC_NUMBER: [u8; 2] = [0x1f, 0x8b];
+const TAR_BLOCK_SIZE: u64 = 512;
+const TAR_MAGIC_NUMBER: &[u8] = b"ustar";
+const BLOB_PATH_PREFIX: &[u8] = b"blobs/sha256/";
+const SHA256_DIGEST_PREFIX: &[u8] = b"sha256:";
+const SHA256_HASH_LENGTH: usize = 32;
 
 #[derive(Debug, Clone, Copy)]
 pub enum BlobType {
@@ -15,16 +21,33 @@ pub enum BlobType {
     Json,
 }
 
-#[derive(Debug, Clone)]
-pub struct ChangedFile {
-    path: PathBuf,
+#[derive(Debug, Deserialize)]
+pub struct ConfigLayer {
+    #[serde(rename = "mediaType")]
+    media_type: String,
+    #[serde(deserialize_with = "deserialize_sha256_hash")]
+    digest: Sha256Hash,
     size: u64,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct Index {
-    #[query(".manifests.[0].digest")]
-    manifest_digest: String,
+pub struct HistoryEntry {
+    created_by: String,
+    comment: String,
+    empty_layer: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum JsonBlob {
+    Manifest { layers: Vec<ConfigLayer> },
+    Config { history: Vec<HistoryEntry> },
+}
+
+#[derive(Debug, Clone)]
+pub struct ChangedFile {
+    path: PathBuf,
+    size: u64,
 }
 
 pub type LayerChangeSet = Vec<ChangedFile>;
@@ -32,10 +55,57 @@ pub type LayerChangeSet = Vec<ChangedFile>;
 #[derive(Debug, Default)]
 pub struct Parser {}
 
-const TAR_BLOCK_SIZE: u64 = 512;
-const TAR_MAGIC_NUMBER: &[u8] = b"ustar";
-const BLOB_PATH_PREFIX: &[u8] = b"blobs/sha256/";
-const IMAGE_INDEX_PATH: &[u8] = b"index.json";
+type Sha256Hash = [u8; SHA256_HASH_LENGTH];
+
+/// Deserializes a hex string with sha256 hash that is prepended with the `sha256:` prefix
+fn deserialize_sha256_hash<'de, D>(de: D) -> Result<Sha256Hash, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct Sha256HashVisitor;
+
+    impl<'de> Visitor<'de> for Sha256HashVisitor {
+        type Value = Sha256Hash;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a sha256 hash string prefixed with `sha256:`")
+        }
+
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            // Strip the `sha256:` prefix
+            let raw = &v[SHA256_DIGEST_PREFIX.len()..];
+
+            // multiply by 2 because we are dealing with a hex str
+            if raw.len() != SHA256_HASH_LENGTH * 2 {
+                return Err(serde::de::Error::custom("Invalid sha256 digest format"));
+            }
+
+            sha256_hash_from_hex(raw).map_err(|_| serde::de::Error::custom("Failed to parse the sha256 hash"))
+        }
+    }
+
+    de.deserialize_str(Sha256HashVisitor)
+}
+pub fn sha256_hash_from_hex(src: impl AsRef<str>) -> anyhow::Result<Sha256Hash> {
+    let mut sha256_hash = [0u8; 32];
+
+    for (idx, byte_str) in src
+        .as_ref()
+        .as_bytes()
+        .chunks(2)
+        .map(std::str::from_utf8)
+        .filter_map(Result::ok)
+        .enumerate()
+    {
+        let byte = u8::from_str_radix(byte_str, 16).context("error while parsing a sha256 from a hex str")?;
+        sha256_hash[idx] = byte;
+    }
+
+    Ok(sha256_hash)
+}
 
 impl Parser {
     pub fn parse_image<R: Read + Seek>(&self, src: R) -> anyhow::Result<()> {
@@ -53,6 +123,7 @@ impl Parser {
             let header = entry.header();
             headers.push(entry.header().clone());
 
+            dbg!(header);
             let entry_size_in_blocks = {
                 let entry_size = header.entry_size().context("failed to get the entry's file size")?;
                 if entry_size != 0 {
@@ -88,20 +159,29 @@ impl Parser {
                     }
                     BlobType::GzippedTar => todo!("Add support for gzipped tar layers"),
                     BlobType::Json => {
-                        // TODO: add parsing of JSON blobs
+                        dbg!(offset);
+                        let json_blob = self.parse_json_blob::<JsonBlob>(&mut tar_header[..offset].chain(entry))?;
+                        dbg!(json_blob);
                     }
                 }
-            } else if header.path_bytes() == IMAGE_INDEX_PATH {
-                let index = self.parse_json_blob::<Index>(&mut entry)?;
-                dbg!(index);
             }
         }
 
         Ok(())
     }
 
-    fn parse_json_blob<T: DeserializeOwned>(&self, entry: &mut impl Read) -> anyhow::Result<T> {
-        let parsed = serde_json::from_reader::<_, T>(entry).context("failed to parse a json blob")?;
+    fn parse_json_blob<T: DeserializeOwned>(&self, entry: &mut impl Read) -> anyhow::Result<Option<T>> {
+        let parsed = match serde_json::from_reader::<_, T>(entry) {
+            Ok(parsed) => Some(parsed),
+            Err(e) => {
+                if e.is_data() {
+                    None
+                } else {
+                    anyhow::bail!("faield to parse a JSON blob: {}", e)
+                }
+            }
+        };
+
         Ok(parsed)
     }
 
@@ -110,7 +190,10 @@ impl Parser {
         archive.set_ignore_zeros(true);
 
         let mut change_set = LayerChangeSet::new();
-        for entry in archive.entries().context("failed to get entries from the tar blob")? {
+        for entry in archive
+            .entries_with_seek()
+            .context("failed to get entries from the tar blob")?
+        {
             let entry = entry.context("error while reading an entry")?;
             let header = entry.header();
 
@@ -155,6 +238,8 @@ impl Parser {
                         // We need more data
                         continue;
                     }
+                    // TODO: a layer can be a set of zeroes, account for that here
+                    // because otherwise we will try to parse it as a JSON :)
                     if &buf[257..262] == TAR_MAGIC_NUMBER {
                         BlobType::Tar
                     } else if buf[..2] == GZIP_MAGIC_NUMBER {
