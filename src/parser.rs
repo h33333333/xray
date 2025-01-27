@@ -1,4 +1,5 @@
 use core::str;
+use std::collections::{BTreeMap, HashMap};
 use std::io::{Read, Seek};
 use std::path::PathBuf;
 
@@ -8,7 +9,8 @@ use serde::{Deserialize, Deserializer};
 use tar::{Archive, Entry};
 
 const GZIP_MAGIC_NUMBER: [u8; 2] = [0x1f, 0x8b];
-const TAR_BLOCK_SIZE: u64 = 512;
+const TAR_BLOCK_SIZE: usize = 512;
+const TAR_MAGIC_NUMBER_START_IDX: usize = 257;
 const TAR_MAGIC_NUMBER: &[u8] = b"ustar";
 const BLOB_PATH_PREFIX: &[u8] = b"blobs/sha256/";
 const SHA256_DIGEST_PREFIX: &[u8] = b"sha256:";
@@ -16,15 +18,15 @@ const SHA256_HASH_LENGTH: usize = 32;
 
 #[derive(Debug, Clone, Copy)]
 pub enum BlobType {
+    Empty,
     Tar,
     GzippedTar,
     Json,
+    Unknown,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ConfigLayer {
-    #[serde(rename = "mediaType")]
-    media_type: String,
+pub struct LayerConfig {
     #[serde(deserialize_with = "deserialize_sha256_hash")]
     digest: Sha256Hash,
     size: u64,
@@ -33,14 +35,15 @@ pub struct ConfigLayer {
 #[derive(Debug, Deserialize)]
 pub struct HistoryEntry {
     created_by: String,
-    comment: String,
+    comment: Option<String>,
+    #[serde(default)]
     empty_layer: bool,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum JsonBlob {
-    Manifest { layers: Vec<ConfigLayer> },
+    Manifest { layers: Vec<LayerConfig> },
     Config { history: Vec<HistoryEntry> },
 }
 
@@ -49,11 +52,6 @@ pub struct ChangedFile {
     path: PathBuf,
     size: u64,
 }
-
-pub type LayerChangeSet = Vec<ChangedFile>;
-
-#[derive(Debug, Default)]
-pub struct Parser {}
 
 type Sha256Hash = [u8; SHA256_HASH_LENGTH];
 
@@ -89,12 +87,12 @@ where
 
     de.deserialize_str(Sha256HashVisitor)
 }
-pub fn sha256_hash_from_hex(src: impl AsRef<str>) -> anyhow::Result<Sha256Hash> {
+
+pub fn sha256_hash_from_hex(src: impl AsRef<[u8]>) -> anyhow::Result<Sha256Hash> {
     let mut sha256_hash = [0u8; 32];
 
     for (idx, byte_str) in src
         .as_ref()
-        .as_bytes()
         .chunks(2)
         .map(std::str::from_utf8)
         .filter_map(Result::ok)
@@ -107,27 +105,44 @@ pub fn sha256_hash_from_hex(src: impl AsRef<str>) -> anyhow::Result<Sha256Hash> 
     Ok(sha256_hash)
 }
 
+pub type LayerChangeSet = Vec<ChangedFile>;
+
+#[derive(Debug)]
+pub struct LayerConfigN {
+    size: u64,
+    created_by: String,
+    comment: Option<String>,
+}
+
+#[derive(Debug, Default)]
+pub struct Image {
+    per_layer_changeset: HashMap<Sha256Hash, LayerChangeSet>,
+    per_layer_config: BTreeMap<Sha256Hash, LayerConfigN>,
+}
+
+#[derive(Debug, Default)]
+pub struct Parser {}
+
 impl Parser {
-    pub fn parse_image<R: Read + Seek>(&self, src: R) -> anyhow::Result<()> {
-        let mut headers = vec![];
+    pub fn parse_image<R: Read + Seek>(&self, src: R) -> anyhow::Result<Image> {
+        let mut image = Image::default();
+        let mut layers: Option<Vec<LayerConfig>> = None;
+        let mut history: Option<Vec<HistoryEntry>> = None;
 
         let mut archive = Archive::new(src);
         let mut entries = archive
             .entries_with_seek()
             .context("failed to get entries from the archive")?;
 
-        let mut tar_header = [0u8; 262];
+        let mut tar_header = [0u8; TAR_BLOCK_SIZE];
         while let Some(entry) = entries.next() {
             let mut entry = entry.context("error while reading an entry")?;
 
             let header = entry.header();
-            headers.push(entry.header().clone());
-
-            dbg!(header);
             let entry_size_in_blocks = {
                 let entry_size = header.entry_size().context("failed to get the entry's file size")?;
                 if entry_size != 0 {
-                    (entry_size / TAR_BLOCK_SIZE) + (entry_size % TAR_BLOCK_SIZE != 0) as u64
+                    (entry_size / TAR_BLOCK_SIZE as u64) + (entry_size % TAR_BLOCK_SIZE as u64 != 0) as u64
                 } else {
                     0
                 }
@@ -135,12 +150,22 @@ impl Parser {
 
             // Check if it's a blob or index/manifest
             if header.path_bytes().starts_with(BLOB_PATH_PREFIX) && entry_size_in_blocks != 0 {
+                let layer_sha256_digest = sha256_hash_from_hex(
+                    header
+                        .path_bytes()
+                        .strip_prefix(BLOB_PATH_PREFIX)
+                        // SAFETY: checked above
+                        .expect("should start with a blob path prefix"),
+                )
+                .context("failed to parse the layer's sha256 digest from the path")?;
+
                 // Check if blob is tar/gzipped tar
                 let (blob_type, offset) = self
                     .determine_blob_type(&mut tar_header, &mut entry)
                     .context("failed to determine the blob type of an entry")?;
 
                 match blob_type {
+                    BlobType::Empty => {}
                     BlobType::Tar => {
                         let mut reader = archive.into_inner();
 
@@ -151,23 +176,60 @@ impl Parser {
                                 .context("failed to wind back the reader")?;
                         }
 
-                        self.parse_tar_blob(&mut reader, entry_size_in_blocks * TAR_BLOCK_SIZE)
+                        let layer_changeset = self
+                            .parse_tar_blob(&mut reader, entry_size_in_blocks * TAR_BLOCK_SIZE as u64)
                             .context("error while parsing a tar layer")?;
+
+                        image.per_layer_changeset.insert(layer_sha256_digest, layer_changeset);
 
                         archive = Archive::new(reader);
                         entries = archive.entries_with_seek()?;
                     }
                     BlobType::GzippedTar => todo!("Add support for gzipped tar layers"),
                     BlobType::Json => {
-                        dbg!(offset);
                         let json_blob = self.parse_json_blob::<JsonBlob>(&mut tar_header[..offset].chain(entry))?;
-                        dbg!(json_blob);
+                        if let Some(known_json_blob) = json_blob {
+                            match known_json_blob {
+                                JsonBlob::Manifest { layers: parsed_layers } => {
+                                    layers = Some(parsed_layers);
+                                }
+                                JsonBlob::Config {
+                                    history: parsed_history,
+                                } => {
+                                    history = Some(parsed_history);
+                                }
+                            }
+                        };
+                    }
+                    BlobType::Unknown => {
+                        tracing::info!("Unknown blob type was encountered while parsing the image")
                     }
                 }
             }
         }
 
-        Ok(())
+        let mut layers = layers.context("malformed docker image: manifest is missing")?;
+        for layer_history in history
+            .context("malformed docker image: config is missing")?
+            .into_iter()
+            .rev()
+            .filter(|entry| !entry.empty_layer)
+        {
+            let layer_config = layers
+                .pop()
+                .context("malformed docker image: more history entries than actual layers")?;
+
+            image.per_layer_config.insert(
+                layer_config.digest,
+                LayerConfigN {
+                    size: layer_config.size,
+                    created_by: layer_history.created_by,
+                    comment: layer_history.comment,
+                },
+            );
+        }
+
+        Ok(image)
     }
 
     fn parse_json_blob<T: DeserializeOwned>(&self, entry: &mut impl Read) -> anyhow::Result<Option<T>> {
@@ -232,20 +294,30 @@ impl Parser {
             filled += read;
 
             let blob_type = match read {
-                0 => BlobType::Json,
+                0 => {
+                    if filled != 0 {
+                        // If nothing else matched and we reached EOF, then this blob must be a JSON
+                        BlobType::Json
+                    } else {
+                        // Nothing to read for this blob, so we can't be sure about it's type
+                        BlobType::Unknown
+                    }
+                }
                 1.. => {
-                    if filled < 2 || (buf[..2] != GZIP_MAGIC_NUMBER && filled != 262) {
+                    if filled == TAR_BLOCK_SIZE && buf.iter().all(|byte| *byte == 0) {
+                        BlobType::Empty
+                    } else if filled >= TAR_MAGIC_NUMBER_START_IDX + TAR_MAGIC_NUMBER.len()
+                        && has_tar_magic_number(&buf)
+                    {
+                        BlobType::Tar
+                    } else if filled >= GZIP_MAGIC_NUMBER.len() && buf.starts_with(&GZIP_MAGIC_NUMBER) {
+                        BlobType::GzippedTar
+                    } else if filled == TAR_BLOCK_SIZE {
+                        // We read a single tar block and weren't able to match this layer to any other type, so it must be a JSON
+                        BlobType::Json
+                    } else {
                         // We need more data
                         continue;
-                    }
-                    // TODO: a layer can be a set of zeroes, account for that here
-                    // because otherwise we will try to parse it as a JSON :)
-                    if &buf[257..262] == TAR_MAGIC_NUMBER {
-                        BlobType::Tar
-                    } else if buf[..2] == GZIP_MAGIC_NUMBER {
-                        BlobType::GzippedTar
-                    } else {
-                        BlobType::Json
                     }
                 }
             };
@@ -255,4 +327,15 @@ impl Parser {
 
         Ok((BlobType::Json, filled))
     }
+}
+
+fn has_tar_magic_number(buf: impl AsRef<[u8]>) -> bool {
+    let buf = buf.as_ref();
+    if buf.len() < TAR_MAGIC_NUMBER_START_IDX + TAR_MAGIC_NUMBER.len()
+        || &buf[TAR_MAGIC_NUMBER_START_IDX..TAR_MAGIC_NUMBER_START_IDX + TAR_MAGIC_NUMBER.len()] != TAR_MAGIC_NUMBER
+    {
+        return false;
+    }
+
+    true
 }
