@@ -4,3 +4,4 @@ mod config;
 pub use config::Config;
 mod parser;
 pub use parser::Parser;
+mod tui;
