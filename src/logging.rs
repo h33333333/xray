@@ -43,8 +43,8 @@ pub fn init_logging(config_folder: &Path) -> anyhow::Result<()> {
             layer().pretty().with_writer(log_file).with_ansi(false).with_filter(
                 EnvFilter::builder()
                     .with_env_var(LOGGING_FILE_ENV)
-                    .with_default_directive(LevelFilter::TRACE.into())
-                    .from_env_lossy(),
+                    .try_from_env()
+                    .unwrap_or_else(|_| format!("{}=trace", env!("CARGO_CRATE_NAME")).into()),
             ),
         )
         .try_init()
