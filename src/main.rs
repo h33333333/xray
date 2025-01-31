@@ -4,10 +4,7 @@ use std::path::Path;
 
 use anyhow::Context;
 use crossterm::event::{self, Event};
-use ratatui::layout::{Constraint, Layout};
-use ratatui::widgets::Block;
-use ratatui::{DefaultTerminal, Frame};
-use xray::{init_logging, Config, Parser};
+use xray::{init_app_dispatcher, init_logging, AppAction, AppDispatcher, Config, Parser};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -21,28 +18,16 @@ async fn main() -> anyhow::Result<()> {
     let parser = Parser::default();
     parser.parse_image(reader).context("failed to parse the image")?;
 
-    let terminal = ratatui::init();
-    let result = run(terminal);
-    ratatui::restore();
-
-    result
+    run(init_app_dispatcher())
 }
 
-fn run(mut terminal: DefaultTerminal) -> anyhow::Result<()> {
+fn run(mut dispatcher: AppDispatcher) -> anyhow::Result<()> {
+    // Do the initial render of the interface
+    dispatcher.dispatch(AppAction::Empty)?;
+
     loop {
-        terminal.draw(render)?;
         if matches!(event::read()?, Event::Key(_)) {
             break Ok(());
         }
     }
-}
-
-fn render(frame: &mut Frame) {
-    let [left, right] =
-        Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).areas(frame.area());
-    let [upper_left, lower_left] =
-        Layout::vertical([Constraint::Percentage(10), Constraint::Percentage(90)]).areas(left);
-    frame.render_widget(Block::bordered().title("Image information"), upper_left);
-    frame.render_widget(Block::bordered().title("Layers"), lower_left);
-    frame.render_widget(Block::bordered().title("Layer changes"), right);
 }
