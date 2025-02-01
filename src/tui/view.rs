@@ -1,9 +1,17 @@
+mod pane;
+
 use anyhow::Context;
-use ratatui::layout::{Constraint, Layout};
-use ratatui::widgets::Block;
+pub use pane::Pane;
+use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::{DefaultTerminal, Frame};
 
 use super::store::{AppState, Store};
+
+/// By default, panes are located as follows:
+///     1. Upper left pane  - image information pane.
+///     2. Bottom left pane - layer selection pane.
+///     3. Right pane       - layer diff pane.
+const PANE_ORDER: [Pane; 3] = [Pane::ImageInfo, Pane::LayerSelector, Pane::LayerInspector];
 
 /// A Flux view that works with a specific [Store].
 pub trait View<S: Store> {
@@ -57,12 +65,23 @@ impl View<AppState> for App {
     }
 }
 
-fn render(frame: &mut Frame, _store: &AppState) {
+fn render(frame: &mut Frame, state: &AppState) {
+    let rectangles = split_layout(frame.area());
+
+    for (idx, pane) in PANE_ORDER.iter().enumerate() {
+        let pane_area = rectangles[idx];
+        frame.render_widget(pane.render(state), pane_area);
+    }
+}
+
+/// Splits the passed area into two columns, also splitting the first column vertically.
+///
+/// Returns an array that contains upper left, lower left, and right [Rect].
+fn split_layout(initial_area: Rect) -> [Rect; 3] {
     let [left, right] =
-        Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).areas(frame.area());
+        Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).areas(initial_area);
     let [upper_left, lower_left] =
         Layout::vertical([Constraint::Percentage(10), Constraint::Percentage(90)]).areas(left);
-    frame.render_widget(Block::bordered().title("Image information"), upper_left);
-    frame.render_widget(Block::bordered().title("Layers"), lower_left);
-    frame.render_widget(Block::bordered().title("Layer changes"), right);
+
+    [upper_left, lower_left, right]
 }

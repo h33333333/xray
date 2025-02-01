@@ -3,7 +3,7 @@ use std::io::BufReader;
 use std::path::Path;
 
 use anyhow::Context;
-use crossterm::event::{self, Event};
+use crossterm::event::{self, Event, KeyCode};
 use xray::{init_app_dispatcher, init_logging, AppAction, AppDispatcher, Config, Parser};
 
 #[tokio::main]
@@ -26,8 +26,14 @@ fn run(mut dispatcher: AppDispatcher) -> anyhow::Result<()> {
     dispatcher.dispatch(AppAction::Empty)?;
 
     loop {
-        if matches!(event::read()?, Event::Key(_)) {
-            break Ok(());
+        let event = event::read()?;
+
+        match event {
+            Event::Key(event) if event.code == KeyCode::Char('q') => break Ok(()),
+            Event::Key(event) if event.code == KeyCode::Tab => {
+                dispatcher.dispatch(AppAction::TogglePane)?;
+            }
+            evt => tracing::trace!("Ignoring an event: {:?}", evt),
         }
     }
 }
