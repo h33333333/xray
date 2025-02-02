@@ -1,17 +1,11 @@
 mod pane;
 
 use anyhow::Context;
-pub use pane::Pane;
+pub use pane::{ActivePane, Pane};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::{DefaultTerminal, Frame};
 
 use super::store::{AppState, Store};
-
-/// By default, panes are located as follows:
-///     1. Upper left pane  - image information pane.
-///     2. Bottom left pane - layer selection pane.
-///     3. Right pane       - layer diff pane.
-const PANE_ORDER: [Pane; 3] = [Pane::ImageInfo, Pane::LayerSelector, Pane::LayerInspector];
 
 /// A Flux view that works with a specific [Store].
 pub trait View<S: Store> {
@@ -66,10 +60,8 @@ impl View<AppState> for App {
 }
 
 fn render(frame: &mut Frame, state: &AppState) {
-    let rectangles = split_layout(frame.area());
-
-    for (idx, pane) in PANE_ORDER.iter().enumerate() {
-        let pane_area = rectangles[idx];
+    let pane_areas = split_layout(frame.area());
+    for (pane_area, pane) in pane_areas.into_iter().zip(state.panes.iter()) {
         frame.render_widget(pane.render(state), pane_area);
     }
 }
