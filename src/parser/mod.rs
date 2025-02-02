@@ -4,12 +4,13 @@ mod constants;
 mod json;
 mod util;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::io::{Read, Seek};
 use std::path::PathBuf;
 
 use anyhow::Context;
 use constants::{BLOB_PATH_PREFIX, SHA256_DIGEST_LENGTH, TAR_BLOCK_SIZE, TAR_MAGIC_NUMBER, TAR_MAGIC_NUMBER_START_IDX};
+use indexmap::IndexMap;
 use json::{ImageHistory, ImageLayerConfigs, JsonBlob};
 use serde::de::DeserializeOwned;
 use tar::Archive;
@@ -37,7 +38,7 @@ pub struct Image {
     /// The total number of non-empty layers.
     pub non_empty_layers: usize,
     /// All [Layers](Layer) of this image.
-    pub layers: BTreeMap<Sha256Digest, Layer>,
+    pub layers: IndexMap<Sha256Digest, Layer>,
 }
 
 /// A single layer within the [Image].
@@ -226,7 +227,8 @@ impl Parser {
 
     /// Processes all the parsed data and turns it into an [Image].
     fn finalize(self) -> anyhow::Result<Image> {
-        let mut layers = BTreeMap::new();
+        // Use IndexMap so that layers are always in the correct order
+        let mut layers = IndexMap::new();
 
         let layer_configs = self
             .layer_configs
