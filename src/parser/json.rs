@@ -13,15 +13,20 @@ pub(super) type ImageHistory = Vec<HistoryEntry>;
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub(super) enum JsonBlob {
-    Manifest { layers: ImageLayerConfigs },
-    Config { history: ImageHistory },
+    Manifest {
+        layers: ImageLayerConfigs,
+    },
+    Config {
+        architecture: String,
+        os: String,
+        history: ImageHistory,
+    },
 }
 
 #[derive(Debug, Deserialize)]
 pub(super) struct LayerConfig {
     #[serde(deserialize_with = "deserialize_sha256_hash")]
     pub digest: Sha256Digest,
-    pub size: u64,
 }
 
 #[derive(Debug, Deserialize)]

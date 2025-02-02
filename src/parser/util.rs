@@ -43,7 +43,7 @@ pub(super) fn get_entry_size_in_blocks(header: &Header) -> anyhow::Result<u64> {
 
 /// Determines the type of a blob by reading the first [Tar block](TAR_BLOCK_SIZE) and checking its contents.
 ///
-/// Returns the determined [BlobType] and the number of bytes that was read from the provided reader.
+/// Returns the determined [BlobType] and the number of bytes that were read from the provided reader.
 pub(super) fn determine_blob_type<R: Read>(buf: &mut [u8], src: &mut R) -> anyhow::Result<(BlobType, usize)> {
     let mut filled = 0;
 

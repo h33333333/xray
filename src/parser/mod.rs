@@ -17,34 +17,59 @@ use util::{determine_blob_type, get_entry_size_in_blocks, sha256_digest_from_hex
 
 pub type Sha256Digest = [u8; SHA256_DIGEST_LENGTH];
 pub type LayerChangeSet = Vec<ChangedFile>;
+type LayerSize = u64;
 
 /// A parsed OCI-compliant container image.
 #[derive(Debug, Default)]
 pub struct Image {
-    pub per_layer_changeset: HashMap<Sha256Digest, LayerChangeSet>,
-    pub per_layer_config: BTreeMap<Sha256Digest, LayerConfig>,
+    /// The repository of the image.
+    pub repository: String,
+    /// The tag of the image.
+    pub tag: String,
+    /// The total size of the image in bytes.
+    pub size: u64,
+    /// The architecture of the image.
+    pub architecture: String,
+    /// The OS of the image.
+    pub os: String,
+    /// The total number of layers.
+    pub total_layers: usize,
+    /// The total number of non-empty layers.
+    pub non_empty_layers: usize,
+    /// All [Layers](Layer) of this image.
+    pub layers: BTreeMap<Sha256Digest, Layer>,
 }
 
-/// Represents a single changed file within an image layer.
+/// A single layer within the [Image].
+#[derive(Debug)]
+pub struct Layer {
+    /// A [LayerChangeSet] for this layer.
+    ///
+    /// Can be missing if the layer is empty.
+    pub changeset: Option<LayerChangeSet>,
+    /// Size of this layer.
+    pub size: u64,
+    /// Command that created this image.
+    pub created_by: String,
+    /// Comment to the command from [Layer::created_by].
+    pub comment: Option<String>,
+}
+
+/// Represents a single changed file within an [Image]'s [Layer].
 #[derive(Debug, Clone)]
 pub struct ChangedFile {
     pub path: PathBuf,
     pub size: u64,
 }
 
-#[derive(Debug)]
-pub struct LayerConfig {
-    pub size: u64,
-    pub created_by: String,
-    pub comment: Option<String>,
-}
-
 /// A parser for OCI-compliant container images represented as Tar blobs.
 #[derive(Debug, Default)]
 pub struct Parser {
-    per_layer_changeset: HashMap<Sha256Digest, LayerChangeSet>,
-    layers: Option<ImageLayerConfigs>,
+    parsed_layers: HashMap<Sha256Digest, (LayerChangeSet, LayerSize)>,
+    layer_configs: Option<ImageLayerConfigs>,
     history: Option<ImageHistory>,
+    architecture: Option<String>,
+    os: Option<String>,
 }
 
 impl Parser {
@@ -100,11 +125,12 @@ impl Parser {
                             .context("failed to wind back the reader")?;
                     }
 
-                    let layer_changeset = self
+                    let (layer_changeset, layer_size) = self
                         .parse_tar_blob(&mut reader, entry_size_in_blocks * TAR_BLOCK_SIZE as u64)
                         .context("error while parsing a tar layer")?;
 
-                    self.per_layer_changeset.insert(layer_sha256_digest, layer_changeset);
+                    self.parsed_layers
+                        .insert(layer_sha256_digest, (layer_changeset, layer_size));
 
                     // Restore the archive and the iterator
                     archive = Archive::new(reader);
@@ -116,11 +142,15 @@ impl Parser {
                     if let Some(known_json_blob) = json_blob {
                         match known_json_blob {
                             JsonBlob::Manifest { layers: parsed_layers } => {
-                                self.layers = Some(parsed_layers);
+                                self.layer_configs = Some(parsed_layers);
                             }
                             JsonBlob::Config {
+                                architecture: parsed_architecture,
+                                os: parsed_os,
                                 history: parsed_history,
                             } => {
+                                self.architecture = Some(parsed_architecture);
+                                self.os = Some(parsed_os);
                                 self.history = Some(parsed_history);
                             }
                         }
@@ -151,13 +181,18 @@ impl Parser {
         Ok(parsed)
     }
 
-    /// Parses a single image layer represented as a TAR blob.
-    fn parse_tar_blob<R: Read + Seek>(&self, src: &mut R, blob_size: u64) -> anyhow::Result<LayerChangeSet> {
+    /// Parses a single image layer represented as a Tar blob.
+    fn parse_tar_blob<R: Read + Seek>(
+        &self,
+        src: &mut R,
+        blob_size: u64,
+    ) -> anyhow::Result<(LayerChangeSet, LayerSize)> {
         let mut archive = Archive::new(src);
         // We don't want to stop when we encounter an empty Tar header, as we want to parse other blobs as well
         archive.set_ignore_zeros(true);
 
         let mut change_set = LayerChangeSet::new();
+        let mut layer_size = 0;
         for entry in archive
             .entries_with_seek()
             .context("failed to get entries from the tar blob")?
@@ -172,40 +207,54 @@ impl Parser {
                     .seek_relative(-(TAR_BLOCK_SIZE as i64))
                     .context("failed to wind back the header")?;
 
-                return Ok(change_set);
+                return Ok((change_set, layer_size));
             }
 
             if let Ok(path) = header.path() {
+                let size = header.size().unwrap_or(0);
+                layer_size += size;
+
                 change_set.push(ChangedFile {
                     path: path.into_owned(),
-                    size: header.size().unwrap_or(0),
+                    size,
                 })
             }
         }
 
-        Ok(change_set)
+        Ok((change_set, layer_size))
     }
 
     /// Processes all the parsed data and turns it into an [Image].
     fn finalize(self) -> anyhow::Result<Image> {
-        let mut per_layer_config = BTreeMap::new();
+        let mut layers = BTreeMap::new();
 
-        let mut layers = self.layers.context("malformed docker image: manifest is missing")?;
-        for layer_history in self
-            .history
-            .context("malformed docker image: config is missing")?
+        let layer_configs = self
+            .layer_configs
+            .context("malformed container image: manifest is missing")?;
+        let layers_history = self.history.context("malformed container image: config is missing")?;
+
+        let total_layers = layers_history.len();
+        let non_empty_layers = layer_configs.len();
+
+        let mut per_layer_changeset = self.parsed_layers;
+        let mut image_size = 0;
+        for (layer_config, layer_history) in layer_configs
             .into_iter()
-            .rev()
-            .filter(|entry| !entry.empty_layer)
+            .zip(layers_history.into_iter().filter(|entry| !entry.empty_layer))
         {
-            let layer_config = layers
-                .pop()
-                .context("malformed docker image: more history entries than actual layers")?;
+            let (layer_changeset, layer_size) = per_layer_changeset
+                .remove(&layer_config.digest)
+                // Turn into `Option<LayerChangeset>` to avoid a pointless empty `Vec` allocation.
+                .map(|(changeset, size)| (Some(changeset), size))
+                // Changeset can be missing if layer didn't cause any FS changes
+                .unwrap_or_default();
 
-            per_layer_config.insert(
+            image_size += layer_size;
+            layers.insert(
                 layer_config.digest,
-                LayerConfig {
-                    size: layer_config.size,
+                Layer {
+                    changeset: layer_changeset,
+                    size: layer_size,
                     created_by: layer_history.created_by,
                     comment: layer_history.comment,
                 },
@@ -213,8 +262,16 @@ impl Parser {
         }
 
         Ok(Image {
-            per_layer_changeset: self.per_layer_changeset,
-            per_layer_config,
+            repository: "hello-docker".to_owned(),
+            tag: "latest".to_owned(),
+            size: image_size,
+            architecture: self
+                .architecture
+                .context("malformed container image: missing architecture")?,
+            os: self.os.context("malformed container image: missing os")?,
+            total_layers,
+            non_empty_layers,
+            layers,
         })
     }
 }
