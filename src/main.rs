@@ -16,9 +16,9 @@ async fn main() -> anyhow::Result<()> {
     let reader = BufReader::new(image);
 
     let parser = Parser::default();
-    parser.parse_image(reader).context("failed to parse the image")?;
+    let image = parser.parse_image(reader).context("failed to parse the image")?;
 
-    run(init_app_dispatcher())
+    run(init_app_dispatcher(image))
 }
 
 fn run(mut dispatcher: AppDispatcher) -> anyhow::Result<()> {

@@ -1,5 +1,6 @@
 use super::action::AppAction;
 use super::view::{ActivePane, Pane};
+use crate::parser::Image;
 
 /// A Flux store that can handle a [Store::Action].
 pub trait Store {
@@ -19,10 +20,18 @@ pub struct AppState {
     pub active_pane: ActivePane,
 }
 
-impl Default for AppState {
-    fn default() -> Self {
+impl AppState {
+    pub fn new(image: Image) -> Self {
+        let image_info_pane = Pane::ImageInfo {
+            repository: image.repository,
+            tag: image.tag,
+            size: image.size,
+            architecture: image.architecture,
+            os: image.os,
+        };
+
         AppState {
-            panes: [Pane::ImageInfo, Pane::LayerSelector, Pane::LayerInspector],
+            panes: [image_info_pane, Pane::LayerSelector, Pane::LayerInspector],
             active_pane: ActivePane::default(),
         }
     }

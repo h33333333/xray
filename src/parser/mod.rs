@@ -264,7 +264,9 @@ impl Parser {
         }
 
         Ok(Image {
+            // FIXME: extract from manifest
             repository: "hello-docker".to_owned(),
+            // FIXME: extract from manifest
             tag: "latest".to_owned(),
             size: image_size,
             architecture: self

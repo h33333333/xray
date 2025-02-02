@@ -8,7 +8,14 @@ use crate::tui::store::AppState;
 /// Each variant can also hold all the state that a particular pane needs, as
 /// these variants are created once during the app initialization and are then reused.
 pub enum Pane {
-    ImageInfo,
+    /// Contains all image-related information from [crate::parser::Image].
+    ImageInfo {
+        repository: String,
+        tag: String,
+        size: u64,
+        architecture: String,
+        os: String,
+    },
     LayerSelector,
     LayerInspector,
 }
@@ -28,7 +35,7 @@ impl Pane {
     /// Returns the pane's title.
     fn title(&self) -> &'static str {
         match self {
-            Pane::ImageInfo => "Image information",
+            Pane::ImageInfo { .. } => "Image information",
             Pane::LayerSelector => "Layers",
             Pane::LayerInspector => "Layer changes",
         }
@@ -62,7 +69,7 @@ impl ActivePane {
     /// Checks if the provided [Pane] is the currently active one.
     pub fn is_pane_active(&self, pane: &Pane) -> bool {
         match self {
-            ActivePane::ImageInfo if matches!(pane, Pane::ImageInfo) => true,
+            ActivePane::ImageInfo if matches!(pane, Pane::ImageInfo { .. }) => true,
             ActivePane::LayerSelector if matches!(pane, Pane::LayerSelector) => true,
             ActivePane::LayerInspector if matches!(pane, Pane::LayerInspector) => true,
             _ => false,
