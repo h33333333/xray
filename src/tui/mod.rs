@@ -1,3 +1,5 @@
+use action::Direction;
+use crossterm::event::{self, Event, KeyCode};
 use dispatcher::Dispatcher;
 use store::AppState;
 use view::App;
@@ -8,6 +10,7 @@ pub use action::AppAction;
 use crate::parser::Image;
 mod dispatcher;
 mod store;
+mod util;
 mod view;
 
 pub type AppDispatcher = Dispatcher<AppState, App>;
@@ -16,4 +19,33 @@ pub fn init_app_dispatcher(image: Image) -> AppDispatcher {
     let store = AppState::new(image);
     let view = App::new();
     Dispatcher::new(store, view)
+}
+
+pub fn run(mut dispatcher: AppDispatcher) -> anyhow::Result<()> {
+    // Do the initial render of the interface
+    dispatcher.dispatch(AppAction::Empty)?;
+
+    loop {
+        let event = event::read()?;
+
+        match event {
+            Event::Key(event) if event.code == KeyCode::Char('q') => break Ok(()),
+            Event::Key(event) if event.code == KeyCode::Tab => {
+                dispatcher.dispatch(AppAction::TogglePane(Direction::Forward))?;
+            }
+            Event::Key(event) if event.code == KeyCode::BackTab => {
+                dispatcher.dispatch(AppAction::TogglePane(Direction::Backward))?;
+            }
+            Event::Key(event) if event.code == KeyCode::Char('j') || event.code == KeyCode::Down => {
+                dispatcher.dispatch(AppAction::Move(Direction::Forward))?;
+            }
+            Event::Key(event) if event.code == KeyCode::Char('k') || event.code == KeyCode::Up => {
+                dispatcher.dispatch(AppAction::Move(Direction::Backward))?;
+            }
+            Event::Key(event) if event.code == KeyCode::Char('c') => {
+                dispatcher.dispatch(AppAction::Copy)?;
+            }
+            evt => tracing::trace!("Ignoring an event: {:?}", evt),
+        }
+    }
 }

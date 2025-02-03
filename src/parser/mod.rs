@@ -18,6 +18,7 @@ use util::{determine_blob_type, get_entry_size_in_blocks, sha256_digest_from_hex
 
 pub type Sha256Digest = [u8; SHA256_DIGEST_LENGTH];
 pub type LayerChangeSet = Vec<ChangedFile>;
+
 type LayerSize = u64;
 
 /// A parsed OCI-compliant container image.
@@ -50,7 +51,7 @@ pub struct Layer {
     pub changeset: Option<LayerChangeSet>,
     /// Size of this layer.
     pub size: u64,
-    /// Command that created this image.
+    /// Command that created this layer.
     pub created_by: String,
     /// Comment to the command from [Layer::created_by].
     pub comment: Option<String>,

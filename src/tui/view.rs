@@ -1,7 +1,7 @@
 mod pane;
 
 use anyhow::Context;
-pub use pane::{ActivePane, Pane};
+pub use pane::{ActivePane, ImageInfoPane, Pane};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::{DefaultTerminal, Frame};
 
@@ -72,8 +72,7 @@ fn render(frame: &mut Frame, state: &AppState) {
 fn split_layout(initial_area: Rect) -> [Rect; 3] {
     let [left, right] =
         Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).areas(initial_area);
-    let [upper_left, lower_left] =
-        Layout::vertical([Constraint::Percentage(10), Constraint::Percentage(90)]).areas(left);
+    let [upper_left, lower_left] = Layout::vertical([Constraint::Min(7), Constraint::Percentage(100)]).areas(left);
 
     [upper_left, lower_left, right]
 }
