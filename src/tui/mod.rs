@@ -1,4 +1,5 @@
 use action::Direction;
+use anyhow::Context;
 use crossterm::event::{self, Event, KeyCode};
 use dispatcher::Dispatcher;
 use store::AppState;
@@ -15,10 +16,10 @@ mod view;
 
 pub type AppDispatcher = Dispatcher<AppState, App>;
 
-pub fn init_app_dispatcher(image: Image) -> AppDispatcher {
-    let store = AppState::new(image);
+pub fn init_app_dispatcher(image: Image) -> anyhow::Result<AppDispatcher> {
+    let store = AppState::new(image).context("failed to initialize the app state")?;
     let view = App::new();
-    Dispatcher::new(store, view)
+    Ok(Dispatcher::new(store, view))
 }
 
 pub fn run(mut dispatcher: AppDispatcher) -> anyhow::Result<()> {

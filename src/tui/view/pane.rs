@@ -1,9 +1,13 @@
+use std::cmp::Ordering;
+
 use arboard::Clipboard;
+use indexmap::IndexMap;
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::block::Title;
 use ratatui::widgets::{Block, BorderType, Paragraph, Widget};
 
+use crate::parser::{Layer, Sha256Digest};
 use crate::tui::action::Direction;
 use crate::tui::store::AppState;
 use crate::tui::util::bytes_to_human_readable_units;
@@ -62,6 +66,25 @@ impl ImageInfoPane {
     }
 }
 
+#[derive(Debug)]
+pub struct LayerSelectorPane {
+    /// The currently selected layer.
+    selected_layer_digest: Sha256Digest,
+    /// We store both its [LayerSelectorPane::selected_layer_digest] and the index in order to optimize the lookup.
+    ///
+    /// The index **must** be a valid index that points to an entry in [AppState::layers].
+    selected_layer_idx: usize,
+}
+
+impl LayerSelectorPane {
+    pub fn new(digest: Sha256Digest, idx: usize) -> Self {
+        LayerSelectorPane {
+            selected_layer_digest: digest,
+            selected_layer_idx: idx,
+        }
+    }
+}
+
 /// All panes that exist in the app.
 ///
 /// Each variant can also hold all the state that a particular pane needs, as
@@ -69,7 +92,7 @@ impl ImageInfoPane {
 pub enum Pane {
     /// Contains all image-related information from [crate::parser::Image].
     ImageInfo(ImageInfoPane),
-    LayerSelector,
+    LayerSelector(LayerSelectorPane),
     LayerInspector,
 }
 
@@ -187,15 +210,67 @@ impl Pane {
 
                 Paragraph::new(Text::from(lines)).block(block)
             }
-            Pane::LayerSelector => Paragraph::new("Layer selector").block(block),
+            Pane::LayerSelector(LayerSelectorPane { selected_layer_idx, .. }) => {
+                let color = if pane_is_active { Color::White } else { Color::Gray };
+
+                let field_value_style = || Style::default().fg(color);
+                let layer_colored_block_indicator_style = |layer_idx: usize| {
+                    let style = Style::default();
+                    match layer_idx.cmp(selected_layer_idx) {
+                        Ordering::Equal => style.bg(Color::LightGreen),
+                        Ordering::Less => style.bg(Color::LightMagenta),
+                        Ordering::Greater => style,
+                    }
+                };
+
+                let lines = state
+                    .layers
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, (_, layer))| {
+                        let (layer_size, unit) = bytes_to_human_readable_units(layer.size);
+                        Line::from(vec![
+                            // A colored block that acts as an indicator of the currently selected layer.
+                            // It's also used to display the layers that are currently used to show aggregated changes.
+                            Span::styled("  ", layer_colored_block_indicator_style(idx)),
+                            Span::styled(
+                                format!(" {:>5.1} {:<2} {}", layer_size, unit.human_readable(), layer.created_by),
+                                field_value_style(),
+                            ),
+                        ])
+                    })
+                    .collect::<Vec<_>>();
+
+                Paragraph::new(Text::from(lines)).block(block)
+            }
             Pane::LayerInspector => Paragraph::new("Layer inspector").block(block),
         }
     }
 
     /// Moves to the next entry in the specified [Direction] inside the [Pane].
-    pub fn move_within_pane(&mut self, direction: Direction) {
-        if let Pane::ImageInfo(ImageInfoPane { active_field, .. }) = self {
-            active_field.toggle(direction)
+    // FIXME: passing `layers` here is ugly. Can I do something about it?
+    pub fn move_within_pane(&mut self, direction: Direction, layers: &IndexMap<Sha256Digest, Layer>) {
+        match self {
+            Pane::ImageInfo(ImageInfoPane { active_field, .. }) => active_field.toggle(direction),
+            Pane::LayerSelector(LayerSelectorPane {
+                selected_layer_digest,
+                selected_layer_idx,
+            }) => {
+                // FIXME: move this logic somewhere else
+                let current_layer_idx = *selected_layer_idx;
+                let next_layer_idx = match direction {
+                    Direction::Forward => (current_layer_idx + 1) % layers.len(),
+                    Direction::Backward => (current_layer_idx + layers.len() - 1) % layers.len(),
+                };
+
+                let (digest, _) = layers
+                    .get_index(next_layer_idx)
+                    .expect("the logic above ensures that idx is valid");
+
+                *selected_layer_digest = *digest;
+                *selected_layer_idx = next_layer_idx;
+            }
+            _ => {}
         }
     }
 
@@ -227,8 +302,8 @@ impl Pane {
     /// Returns the pane's title.
     fn title(&self, is_active: bool) -> impl Into<Title<'static>> {
         let title = match self {
-            Pane::ImageInfo { .. } => "Image information",
-            Pane::LayerSelector => "Layers",
+            Pane::ImageInfo(..) => "Image information",
+            Pane::LayerSelector(..) => "Layers",
             Pane::LayerInspector => "Layer changes",
         };
 
@@ -275,8 +350,8 @@ impl ActivePane {
     /// Checks if the provided [Pane] is the currently active one.
     pub fn is_pane_active(&self, pane: &Pane) -> bool {
         match self {
-            ActivePane::ImageInfo if matches!(pane, Pane::ImageInfo { .. }) => true,
-            ActivePane::LayerSelector if matches!(pane, Pane::LayerSelector) => true,
+            ActivePane::ImageInfo if matches!(pane, Pane::ImageInfo(..)) => true,
+            ActivePane::LayerSelector if matches!(pane, Pane::LayerSelector(..)) => true,
             ActivePane::LayerInspector if matches!(pane, Pane::LayerInspector) => true,
             _ => false,
         }

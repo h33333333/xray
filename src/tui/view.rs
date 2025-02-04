@@ -1,7 +1,7 @@
 mod pane;
 
 use anyhow::Context;
-pub use pane::{ActivePane, ImageInfoPane, Pane};
+pub use pane::{ActivePane, ImageInfoPane, LayerSelectorPane, Pane};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::{DefaultTerminal, Frame};
 

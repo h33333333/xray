@@ -17,5 +17,9 @@ async fn main() -> anyhow::Result<()> {
     let parser = Parser::default();
     let image = parser.parse_image(reader).context("failed to parse the image")?;
 
-    run(init_app_dispatcher(image))
+    if image.layers.is_empty() {
+        anyhow::bail!("Got an image with zero layers, nothing to inspect here")
+    }
+
+    run(init_app_dispatcher(image).context("failed to initialize the app")?)
 }
