@@ -30,6 +30,8 @@ pub fn run(mut dispatcher: AppDispatcher) -> anyhow::Result<()> {
         let event = event::read()?;
 
         match event {
+            // Re-render the interface when terminal window is resized
+            Event::Resize(_, _) => dispatcher.dispatch(AppAction::Empty)?,
             Event::Key(event) if event.code == KeyCode::Char('q') => break Ok(()),
             Event::Key(event) if event.code == KeyCode::Tab => {
                 dispatcher.dispatch(AppAction::TogglePane(Direction::Forward))?;

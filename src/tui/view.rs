@@ -1,7 +1,9 @@
 mod pane;
 
+use std::io;
+
 use anyhow::Context;
-pub use pane::{ActivePane, ImageInfoPane, LayerSelectorPane, Pane};
+pub use pane::{ActivePane, ImageInfoPane, LayerInfoActiveField, LayerSelectorPane, Pane};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::{DefaultTerminal, Frame};
 
@@ -28,7 +30,7 @@ impl App {
     /// Renders a [Frame] to the [App::terminal] based on the current [AppState].
     fn render(&mut self, store: &AppState) -> anyhow::Result<()> {
         self.terminal
-            .draw(|frame| render(frame, store))
+            .try_draw(|frame| render(frame, store).map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{}", e))))
             .context("failed to redraw the frame")?;
 
         Ok(())
@@ -59,20 +61,23 @@ impl View<AppState> for App {
     }
 }
 
-fn render(frame: &mut Frame, state: &AppState) {
+fn render(frame: &mut Frame, state: &AppState) -> anyhow::Result<()> {
     let pane_areas = split_layout(frame.area());
     for (pane_area, pane) in pane_areas.into_iter().zip(state.panes.iter()) {
-        frame.render_widget(pane.render(state), pane_area);
+        frame.render_widget(pane.render(state).context("failed to render a frame")?, pane_area);
     }
+
+    Ok(())
 }
 
-/// Splits the passed area into two columns, also splitting the first column vertically.
+/// Splits the passed [Rect] into two equal columns, also splitting the first column into three vertical sections.
 ///
-/// Returns an array that contains upper left, lower left, and right [Rect].
-fn split_layout(initial_area: Rect) -> [Rect; 3] {
+/// Returns an array that contains upper left, middle left, lower left, and right [Rect].
+fn split_layout(initial_area: Rect) -> [Rect; 4] {
     let [left, right] =
         Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).areas(initial_area);
-    let [upper_left, lower_left] = Layout::vertical([Constraint::Min(7), Constraint::Percentage(100)]).areas(left);
+    let [upper_left, middle_left, lower_left] =
+        Layout::vertical([Constraint::Min(8), Constraint::Min(10), Constraint::Percentage(100)]).areas(left);
 
-    [upper_left, lower_left, right]
+    [upper_left, middle_left, lower_left, right]
 }

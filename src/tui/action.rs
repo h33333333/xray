@@ -14,8 +14,11 @@ pub enum AppAction {
 }
 
 #[derive(Debug, Default, Clone, Copy)]
+/// Represents a direction in which the user wants to [AppAction::Move].
 pub enum Direction {
     #[default]
+    /// Move to the next entry in a pane.
     Forward,
+    /// Move to the previous entry in a pane.
     Backward,
 }

@@ -1,3 +1,5 @@
+use std::fmt::Write as _;
+
 /// Represents the unit of a value.
 pub(crate) enum Unit {
     Bytes,
@@ -21,6 +23,7 @@ impl Unit {
     }
 }
 
+/// Converts the passed number of bytes to a human-readable representation using any suitable [Unit].
 pub(crate) fn bytes_to_human_readable_units(bytes: impl Into<u64>) -> (f64, Unit) {
     let bytes = bytes.into();
     match bytes {
@@ -29,4 +32,12 @@ pub(crate) fn bytes_to_human_readable_units(bytes: impl Into<u64>) -> (f64, Unit
         Unit::MEGABYTE..Unit::GIGABYTE => ((bytes as f64) / (Unit::MEGABYTE as f64), Unit::Megabytes),
         Unit::GIGABYTE.. => ((bytes as f64) / (Unit::GIGABYTE as f64), Unit::Gigabytes),
     }
+}
+
+pub(crate) fn encode_hex(digest: impl AsRef<[u8]>) -> String {
+    let mut s = String::with_capacity(digest.as_ref().len() * 2);
+    for &b in digest.as_ref().iter() {
+        write!(&mut s, "{:02x}", b).unwrap();
+    }
+    s
 }
