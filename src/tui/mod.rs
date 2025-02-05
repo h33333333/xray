@@ -45,7 +45,7 @@ pub fn run(mut dispatcher: AppDispatcher) -> anyhow::Result<()> {
             Event::Key(event) if event.code == KeyCode::Char('k') || event.code == KeyCode::Up => {
                 dispatcher.dispatch(AppAction::Move(Direction::Backward))?;
             }
-            Event::Key(event) if event.code == KeyCode::Char('c') => {
+            Event::Key(event) if event.code == KeyCode::Char('y') => {
                 dispatcher.dispatch(AppAction::Copy)?;
             }
             evt => tracing::trace!("Ignoring an event: {:?}", evt),
