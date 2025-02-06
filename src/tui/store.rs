@@ -16,6 +16,8 @@ pub trait Store {
 }
 
 pub struct AppState {
+    // FIXME: I don't like this dependency on pane layout here.
+    // Can it be moved to `Pane` itself?
     /// By default, panes are placed as follows:
     ///     1. Upper left pane - image information pane.
     ///     2. Middle left pane - layer information pane.
@@ -35,6 +37,7 @@ pub struct AppState {
 impl AppState {
     /// Creates a new instance of the [AppState] using data from the provided [Image].
     pub fn new(image: Image) -> anyhow::Result<Self> {
+        // FIXME: move the pane instantiation somewhere else
         let image_info_pane = Pane::ImageInfo(ImageInfoPane::new(
             image.repository,
             image.tag,
@@ -83,12 +86,13 @@ impl Store for AppState {
         match action {
             AppAction::Empty => tracing::trace!("Received an empty event"),
             AppAction::TogglePane(direction) => self.active_pane.toggle(direction),
-            AppAction::Move(direction) => {
-                self.panes[self.active_pane.pane_idx()].move_within_pane(direction, &self.layers)
-            }
+            AppAction::Move(direction) => self.panes[self.active_pane.pane_idx()]
+                .move_within_pane(direction, &self.layers)
+                .context("error while handling the 'move' action")?,
             AppAction::Copy => {
                 if self.clipboard.is_some() {
-                    self.panes[self.active_pane.pane_idx()].copy(self.clipboard.as_mut().expect("checked before"));
+                    self.panes[self.active_pane.pane_idx()]
+                        .copy(self.clipboard.as_mut().context("how did we get here?")?);
                 } else {
                     tracing::trace!("Can't copy: no clipboard is available");
                 }

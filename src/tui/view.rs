@@ -1,9 +1,11 @@
+mod active_pane;
 mod pane;
 
 use std::io;
 
+pub use active_pane::ActivePane;
 use anyhow::Context;
-pub use pane::{ActivePane, ImageInfoPane, LayerInfoActiveField, LayerSelectorPane, Pane};
+pub use pane::{ImageInfoPane, LayerInfoActiveField, LayerSelectorPane, Pane};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::{DefaultTerminal, Frame};
 
@@ -63,6 +65,8 @@ impl View<AppState> for App {
 
 fn render(frame: &mut Frame, state: &AppState) -> anyhow::Result<()> {
     let pane_areas = split_layout(frame.area());
+    // FIXME: I really don't like this implicit dependency between the rectangles and panes.
+    // Can I make it explicit somehow or move the layout-related logic into the `Pane` enum itself?
     for (pane_area, pane) in pane_areas.into_iter().zip(state.panes.iter()) {
         frame.render_widget(pane.render(state).context("failed to render a frame")?, pane_area);
     }
