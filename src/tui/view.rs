@@ -1,11 +1,12 @@
 mod active_pane;
+mod macros;
 mod pane;
 
 use std::io;
 
 pub use active_pane::ActivePane;
 use anyhow::Context;
-pub use pane::{ImageInfoPane, LayerInfoActiveField, LayerSelectorPane, Pane};
+pub use pane::{ImageInfoPane, LayerInfoPane, LayerSelectorPane, Pane};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::{DefaultTerminal, Frame};
 
@@ -63,10 +64,17 @@ impl View<AppState> for App {
     }
 }
 
+/// Renders the [AppState::panes] in the provided [Frame].
+///
+/// By default, panes are placed as follows:
+///     1. Upper left pane - image information pane.
+///     2. Middle left pane - layer information pane.
+///     3. Bottom left pane - layer selection pane.
+///     4. Right pane - layer diff pane.
 fn render(frame: &mut Frame, state: &AppState) -> anyhow::Result<()> {
     let pane_areas = split_layout(frame.area());
-    // FIXME: I really don't like this implicit dependency between the rectangles and panes.
-    // Can I make it explicit somehow or move the layout-related logic into the `Pane` enum itself?
+    // Panes are always sorted by the render order, so we can just zip rects and panes here,
+    // as the order won't change during runtime.
     for (pane_area, pane) in pane_areas.into_iter().zip(state.panes.iter()) {
         frame.render_widget(pane.render(state).context("failed to render a frame")?, pane_area);
     }

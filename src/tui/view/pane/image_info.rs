@@ -1,12 +1,26 @@
-use super::style::FIELD_VALUE_DELIMITER;
-use super::util::Field;
-use crate::tui::action::Direction;
+use super::util::{Field, FieldKey};
 use crate::tui::util::bytes_to_human_readable_units;
+use crate::{render_order_enum, sort_fields_by_render_order};
+
+render_order_enum!(ImageInfoField, Repository, Tag, Size, Architecture, Os);
+sort_fields_by_render_order!(ImageInfoField);
+
+impl FieldKey for ImageInfoField {
+    fn name(&self) -> &'static str {
+        match self {
+            ImageInfoField::Repository => "Image",
+            ImageInfoField::Tag => "Tag",
+            ImageInfoField::Size => "Image Size",
+            ImageInfoField::Architecture => "Architecture",
+            ImageInfoField::Os => "OS",
+        }
+    }
+}
 
 #[derive(Debug)]
 /// [super::Pane::ImageInfo] pane's state.
 pub struct ImageInfoPane {
-    pub active_field: ImageInfoActiveField,
+    pub active_field: ImageInfoField,
     pub repository: String,
     pub tag: String,
     pub size: u64,
@@ -17,7 +31,7 @@ pub struct ImageInfoPane {
 impl ImageInfoPane {
     pub fn new(repository: String, tag: String, size: u64, architecture: String, os: String) -> Self {
         ImageInfoPane {
-            active_field: ImageInfoActiveField::default(),
+            active_field: ImageInfoField::default(),
             repository,
             tag,
             size,
@@ -26,53 +40,21 @@ impl ImageInfoPane {
         }
     }
 
-    pub fn get_fields(&self) -> [Field; 5] {
+    pub fn get_fields(&self) -> [Field<'_, ImageInfoField>; 5] {
         let (image_size, unit) = bytes_to_human_readable_units(self.size);
-        [
-            ("Image", (&self.repository).into()),
-            ("Tag", (&self.tag).into()),
+        let mut fields = [
+            (ImageInfoField::Repository, (&self.repository).into()),
+            (ImageInfoField::Tag, (&self.tag).into()),
             (
-                "Image Size",
-                format!("{}{:.1} {}", FIELD_VALUE_DELIMITER, image_size, unit.human_readable()).into(),
+                ImageInfoField::Size,
+                format!("{:.1} {}", image_size, unit.human_readable()).into(),
             ),
-            ("Architecture", (&self.architecture).into()),
-            ("OS", (&self.os).into()),
-        ]
-    }
-}
-
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-/// Currently selected field in the [Pane::ImageInfo] pane.
-///
-/// # Safety
-///
-/// Variants in this enum should appear in the order they are rendered onto the terminal in [super::Pane::ImageInfo].
-pub enum ImageInfoActiveField {
-    #[default]
-    Repository,
-    Tag,
-    Size,
-    Architecture,
-    Os,
-}
-
-impl ImageInfoActiveField {
-    const FIELD_ORDER: [ImageInfoActiveField; 5] = [
-        ImageInfoActiveField::Repository,
-        ImageInfoActiveField::Tag,
-        ImageInfoActiveField::Size,
-        ImageInfoActiveField::Architecture,
-        ImageInfoActiveField::Os,
-    ];
-
-    pub fn toggle(&mut self, direction: Direction) {
-        let current_idx = Self::FIELD_ORDER.iter().position(|field| field == self).unwrap();
-
-        let next_idx = match direction {
-            Direction::Forward => (current_idx + 1) % Self::FIELD_ORDER.len(),
-            Direction::Backward => (current_idx + Self::FIELD_ORDER.len() - 1) % Self::FIELD_ORDER.len(),
-        };
-
-        *self = Self::FIELD_ORDER[next_idx];
+            (ImageInfoField::Architecture, (&self.architecture).into()),
+            (ImageInfoField::Os, (&self.os).into()),
+        ];
+        // Ensure that fields are always sorted in the order determined by `ImageInfoField`.
+        // This is not necessary, but ensures that there is only a single source of truth for the order of fields inside the pane.
+        ImageInfoField::sort_fields_by_order(&mut fields);
+        fields
     }
 }

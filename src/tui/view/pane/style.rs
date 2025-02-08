@@ -7,9 +7,7 @@ pub const FIELD_VALUE_STYLE: Style = Style::new().add_modifier(Modifier::ITALIC)
 pub const ACTIVE_FIELD_STYLE: Style = Style::new().add_modifier(Modifier::UNDERLINED);
 pub const FIELD_VALUE_DELIMITER: &str = ": ";
 
-/// Returns the [Color] of the text that is rendered onto the terminal.
-///
-/// Can return different colors based on the status of a pane.
+/// Returns the [Color] of the text based on whether its parent [Pane](super::Pane) is active.
 pub fn text_color(is_active: bool) -> Color {
     if is_active {
         Color::White
@@ -18,7 +16,7 @@ pub fn text_color(is_active: bool) -> Color {
     }
 }
 
-/// Returns a style for a [crate::parser::Layer] based on its comparsion with the currently selected layer.
+/// Returns style for a [crate::parser::Layer] based on its position relative to the currently selected layer.
 ///
 /// This is used in the [super::Pane::LayerSelector] pane.
 pub fn layer_status_indicator_style(layer_idx: usize, selected_layer_idx: &usize) -> Style {

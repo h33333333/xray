@@ -44,7 +44,7 @@ where
 {
     struct Sha256HashVisitor;
 
-    impl<'de> Visitor<'de> for Sha256HashVisitor {
+    impl Visitor<'_> for Sha256HashVisitor {
         type Value = Sha256Digest;
 
         fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {

@@ -3,7 +3,7 @@ use arboard::Clipboard;
 use indexmap::IndexMap;
 
 use super::action::AppAction;
-use super::view::{ActivePane, ImageInfoPane, LayerInfoActiveField, LayerSelectorPane, Pane};
+use super::view::{ActivePane, ImageInfoPane, LayerInfoPane, LayerSelectorPane, Pane};
 use crate::parser::{Image, Layer, Sha256Digest};
 
 /// A Flux store that can handle a [Store::Action].
@@ -16,13 +16,9 @@ pub trait Store {
 }
 
 pub struct AppState {
-    // FIXME: I don't like this dependency on pane layout here.
-    // Can it be moved to `Pane` itself?
-    /// By default, panes are placed as follows:
-    ///     1. Upper left pane - image information pane.
-    ///     2. Middle left pane - layer information pane.
-    ///     3. Bottom left pane - layer selection pane.
-    ///     4. Right pane - layer diff pane.
+    /// All the [Panes](Pane) sorted by their render order.
+    ///
+    /// Check docs of [ActivePane] to understand how panes are ordered.
     pub panes: [Pane; 4],
     /// The currently selected pane.
     pub active_pane: ActivePane,
@@ -48,16 +44,23 @@ impl AppState {
 
         let (digest, _) = image.layers.get_index(0).context("got an image with 0 layers")?;
         let layer_selector_pane = Pane::LayerSelector(LayerSelectorPane::new(*digest, 0));
-        let layer_info_pane = Pane::LayerInfo(LayerInfoActiveField::default());
+        let layer_info_pane = Pane::LayerInfo(LayerInfoPane::default());
 
         let clipboard = Clipboard::new().ok();
+
+        let mut panes = [
+            image_info_pane,
+            layer_info_pane,
+            layer_selector_pane,
+            Pane::LayerInspector,
+        ];
+
+        // Ensure that panes are always sorted by the render order, determined
+        // by the order of enum's variants declaration.
+        panes.sort_by_key(|a| Into::<usize>::into(Into::<ActivePane>::into(a)));
+
         Ok(AppState {
-            panes: [
-                image_info_pane,
-                layer_info_pane,
-                layer_selector_pane,
-                Pane::LayerInspector,
-            ],
+            panes,
             active_pane: ActivePane::default(),
             clipboard,
             layers: image.layers,
@@ -66,7 +69,7 @@ impl AppState {
 
     /// Returns a reference to the currently selected [Layer] and its [Sha256Digest].
     pub fn get_selected_layer(&self) -> anyhow::Result<(&Sha256Digest, &Layer)> {
-        let layer_selector_pane_idx = ActivePane::LayerSelector.pane_idx();
+        let layer_selector_pane_idx: usize = ActivePane::LayerSelector.into();
         let layer_selector_pane = &self.panes[layer_selector_pane_idx];
         let selected_layer_idx = if let Pane::LayerSelector(pane) = layer_selector_pane {
             pane.selected_layer().1
@@ -86,12 +89,12 @@ impl Store for AppState {
         match action {
             AppAction::Empty => tracing::trace!("Received an empty event"),
             AppAction::TogglePane(direction) => self.active_pane.toggle(direction),
-            AppAction::Move(direction) => self.panes[self.active_pane.pane_idx()]
+            AppAction::Move(direction) => self.panes[Into::<usize>::into(self.active_pane)]
                 .move_within_pane(direction, &self.layers)
                 .context("error while handling the 'move' action")?,
             AppAction::Copy => {
                 if self.clipboard.is_some() {
-                    self.panes[self.active_pane.pane_idx()]
+                    self.panes[Into::<usize>::into(self.active_pane)]
                         .copy(self.clipboard.as_mut().context("how did we get here?")?);
                 } else {
                     tracing::trace!("Can't copy: no clipboard is available");

@@ -6,9 +6,10 @@ mod util;
 
 use anyhow::Context;
 use arboard::Clipboard;
-pub use image_info::{ImageInfoActiveField, ImageInfoPane};
+use image_info::ImageInfoField;
+pub use image_info::ImageInfoPane;
 use indexmap::IndexMap;
-pub use layer_info::LayerInfoActiveField;
+pub use layer_info::LayerInfoPane;
 pub use layer_selector::LayerSelectorPane;
 use ratatui::style::{Style, Stylize};
 use ratatui::text::Text;
@@ -29,16 +30,16 @@ pub enum Pane {
     /// Contains all image-related information from [crate::parser::Image].
     ImageInfo(ImageInfoPane),
     /// Displays infromation about the [LayerSelectorPane::selected_layer].
-    LayerInfo(LayerInfoActiveField),
+    LayerInfo(LayerInfoPane),
     /// Allows switching between [Layers](Layer) of the [crate::parser::Image].
     LayerSelector(LayerSelectorPane),
     LayerInspector,
 }
 
 impl Pane {
-    /// Returns a [Widget] that can be used to render the current pane onto the terminal.
+    /// Returns a [Widget] that can be used to render the current pane in the terminal.
     pub fn render<'a>(&'a self, state: &'a AppState) -> anyhow::Result<impl Widget + 'a> {
-        let pane_is_active = state.active_pane.is_pane_active(self);
+        let pane_is_active = state.active_pane == self.into();
 
         let text_color = text_color(pane_is_active);
         let field_key_style = FIELD_KEY_STYLE.fg(text_color);
@@ -47,15 +48,13 @@ impl Pane {
 
         let block = self.get_styled_block(pane_is_active);
         match self {
-            Pane::ImageInfo(pane_state @ ImageInfoPane { active_field, .. }) => {
+            Pane::ImageInfo(pane_state) => {
                 let lines = fields_into_lines(
                     pane_state.get_fields(),
                     field_key_style,
                     field_value_style,
-                    |field_idx| {
-                        // FIXME: this implicitly requires the variants of the enum and fields to be layed out in a particular order.
-                        // I don't like this dependency, can I remove it somehow or make it explicit?
-                        if *active_field as usize == field_idx && pane_is_active {
+                    |field_key| {
+                        if pane_state.active_field == field_key && pane_is_active {
                             active_field_style
                         } else {
                             Style::default()
@@ -70,19 +69,17 @@ impl Pane {
 
                 Ok(Paragraph::new(Text::from(lines)).block(block))
             }
-            Pane::LayerInfo(active_field) => {
+            Pane::LayerInfo(pane_state) => {
                 let (selected_layer_digest, selected_layer) = state
                     .get_selected_layer()
                     .context("failed to get the currently selected layer")?;
 
                 let lines = fields_into_lines(
-                    layer_info::get_fields(selected_layer_digest, selected_layer),
+                    LayerInfoPane::get_fields(selected_layer_digest, selected_layer),
                     field_key_style,
                     field_value_style,
-                    |field_idx| {
-                        // FIXME: this implicitly requires the variants of the enum and fields to be layed out in a particular order.
-                        // I don't like this dependency, can I remove it somehow or make it explicit?
-                        if *active_field as usize == field_idx && pane_is_active {
+                    |field_key| {
+                        if pane_state.active_field == field_key && pane_is_active {
                             active_field_style
                         } else {
                             Style::default()
@@ -124,7 +121,7 @@ impl Pane {
                 *selected_layer_digest = *digest;
                 *selected_layer_idx = next_layer_idx;
             }
-            Pane::LayerInfo(active_field) => active_field.toggle(direction),
+            Pane::LayerInfo(pane_state) => pane_state.active_field.toggle(direction),
             _ => {}
         };
 
@@ -142,12 +139,12 @@ impl Pane {
                 architecture,
                 os,
             }) => match active_field {
-                ImageInfoActiveField::Repository => repository,
-                ImageInfoActiveField::Tag => tag,
+                ImageInfoField::Repository => repository,
+                ImageInfoField::Tag => tag,
                 // FIXME: this is kinda ugly, can I do better somehow?
-                ImageInfoActiveField::Size => &format!("{}", size),
-                ImageInfoActiveField::Architecture => architecture,
-                ImageInfoActiveField::Os => os,
+                ImageInfoField::Size => &format!("{}", size),
+                ImageInfoField::Architecture => architecture,
+                ImageInfoField::Os => os,
             },
             // Pane::LayerInfo(active_field) => match active_field {
             //     LayerInfoActiveField::Digest => &encode_hex(selected_layer_digest),

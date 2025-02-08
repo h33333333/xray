@@ -1,3 +1,5 @@
+#![feature(macro_metavar_expr)]
+
 mod logging;
 pub use logging::init_logging;
 mod config;
