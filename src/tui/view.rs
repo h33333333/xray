@@ -73,6 +73,13 @@ impl View<AppState> for App {
 ///     4. Right pane - layer diff pane.
 fn render(frame: &mut Frame, state: &AppState) -> anyhow::Result<()> {
     let pane_areas = split_layout(frame.area());
+
+    debug_assert_eq!(
+        pane_areas.len(),
+        state.panes.len(),
+        "Each pane should have a corresponding rect that it will be rendered in"
+    );
+
     // Panes are always sorted by the render order, so we can just zip rects and panes here,
     // as the order won't change during runtime.
     for (pane_area, pane) in pane_areas.into_iter().zip(state.panes.iter()) {
