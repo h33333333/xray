@@ -4,11 +4,13 @@ mod layer_selector;
 mod style;
 mod util;
 
+use std::borrow::Cow;
+
 use anyhow::Context;
-use arboard::Clipboard;
 use image_info::ImageInfoField;
 pub use image_info::ImageInfoPane;
 use indexmap::IndexMap;
+use layer_info::LayerInfoField;
 pub use layer_info::LayerInfoPane;
 pub use layer_selector::LayerSelectorPane;
 use ratatui::style::{Style, Stylize};
@@ -21,6 +23,7 @@ use util::fields_into_lines;
 use crate::parser::{Layer, Sha256Digest};
 use crate::tui::action::Direction;
 use crate::tui::store::AppState;
+use crate::tui::util::encode_hex;
 
 /// All panes that exist in the app.
 ///
@@ -128,9 +131,9 @@ impl Pane {
         Ok(())
     }
 
-    /// Copies the currently selected value within a [Pane] to the [Clipboard].
-    pub fn copy(&self, clipboard: &mut Clipboard) {
-        let text_to_copy = match self {
+    /// Returns the currently selected value within a [Pane].
+    pub fn get_selected_field<'a>(&'a self, state: &'a AppState) -> Option<Cow<'a, str>> {
+        match self {
             Pane::ImageInfo(ImageInfoPane {
                 active_field,
                 repository,
@@ -138,27 +141,28 @@ impl Pane {
                 size,
                 architecture,
                 os,
-            }) => match active_field {
-                ImageInfoField::Repository => repository,
-                ImageInfoField::Tag => tag,
+            }) => Some(match active_field {
+                ImageInfoField::Repository => repository.into(),
+                ImageInfoField::Tag => tag.into(),
                 // FIXME: this is kinda ugly, can I do better somehow?
-                ImageInfoField::Size => &format!("{}", size),
-                ImageInfoField::Architecture => architecture,
-                ImageInfoField::Os => os,
-            },
-            // Pane::LayerInfo(active_field) => match active_field {
-            //     LayerInfoActiveField::Digest => &encode_hex(selected_layer_digest),
-            //     LayerInfoActiveField::Command => &selected_layer.created_by,
-            //     LayerInfoActiveField::Comment if matches!(selected_layer.comment, Some(_)) => {
-            //         selected_layer.comment.as_ref().unwrap()
-            //     }
-            //     _ => return,
-            // },
-            // FIXME: make copying work for layer info
-            _ => return,
-        };
-        if let Err(e) = clipboard.set_text(text_to_copy) {
-            tracing::debug!("Failed to copy text to the clipboard: {}", e);
+                ImageInfoField::Size => format!("{}", size).into(),
+                ImageInfoField::Architecture => architecture.into(),
+                ImageInfoField::Os => os.into(),
+            }),
+            Pane::LayerInfo(LayerInfoPane { active_field }) => {
+                let Ok((selected_layer_digest, selected_layer)) = state.get_selected_layer() else {
+                    // Add a log here for debugging purposes in case this happens somehow
+                    tracing::debug!("Failed to get the currently selected layer when getting the selected field from the LayerInfo pane");
+                    return None;
+                };
+
+                Some(match active_field {
+                    LayerInfoField::Digest => encode_hex(selected_layer_digest).into(),
+                    LayerInfoField::Command => selected_layer.created_by.as_str().into(),
+                    LayerInfoField::Comment => selected_layer.comment.as_ref()?.into(),
+                })
+            }
+            _ => None,
         }
     }
 

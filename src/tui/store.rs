@@ -3,6 +3,7 @@ use arboard::Clipboard;
 use indexmap::IndexMap;
 
 use super::action::AppAction;
+use super::util::copy_to_clipboard;
 use super::view::{ActivePane, ImageInfoPane, LayerInfoPane, LayerSelectorPane, Pane};
 use crate::parser::{Image, Layer, Sha256Digest};
 
@@ -93,12 +94,18 @@ impl Store for AppState {
                 .move_within_pane(direction, &self.layers)
                 .context("error while handling the 'move' action")?,
             AppAction::Copy => {
-                if self.clipboard.is_some() {
-                    self.panes[Into::<usize>::into(self.active_pane)]
-                        .copy(self.clipboard.as_mut().context("how did we get here?")?);
-                } else {
+                if self.clipboard.is_none() {
                     tracing::trace!("Can't copy: no clipboard is available");
+                    return Ok(());
                 }
+
+                // HACK: take the clipboard here to avoid fighting the borrow checker in the next block
+                let mut clipboard = self.clipboard.take();
+                if let Some(text_to_copy) = self.panes[Into::<usize>::into(self.active_pane)].get_selected_field(self) {
+                    copy_to_clipboard(clipboard.as_mut(), text_to_copy);
+                }
+                // Return the clipboard where it belongs
+                self.clipboard = clipboard;
             }
         };
 

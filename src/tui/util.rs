@@ -1,5 +1,7 @@
 use std::fmt::Write as _;
 
+use arboard::Clipboard;
+
 /// Represents the unit of a value.
 pub(crate) enum Unit {
     Bytes,
@@ -40,4 +42,13 @@ pub(crate) fn encode_hex(digest: impl AsRef<[u8]>) -> String {
         write!(&mut s, "{:02x}", b).unwrap();
     }
     s
+}
+
+/// Copies the provided [data] into [Clipboard] if it's present.
+pub(crate) fn copy_to_clipboard(clipboard: Option<&mut Clipboard>, data: std::borrow::Cow<'_, str>) {
+    if let Some(clipboard) = clipboard {
+        if let Err(e) = clipboard.set_text(data) {
+            tracing::debug!("Failed to copy text to the clipboard: {}", e);
+        };
+    }
 }
