@@ -17,9 +17,18 @@ use tar::Archive;
 use util::{determine_blob_type, get_entry_size_in_blocks, sha256_digest_from_hex};
 
 pub type Sha256Digest = [u8; SHA256_DIGEST_LENGTH];
-pub type LayerChangeSet = Vec<ChangedFile>;
+pub type LayerChangeSet = HashMap<PathBuf, FileState>;
 
 type LayerSize = u64;
+
+/// Represents state of a file in a layer.
+#[derive(Debug)]
+pub enum FileState {
+    /// A file that exists in a layer with its size.
+    Exists(u64),
+    /// File that was deleted in this layer
+    Deleted,
+}
 
 /// A parsed OCI-compliant container image.
 #[derive(Debug, Default)]
@@ -55,13 +64,6 @@ pub struct Layer {
     pub created_by: String,
     /// Comment to the command from [Layer::created_by].
     pub comment: Option<String>,
-}
-
-/// Represents a single changed file within an [Image]'s [Layer].
-#[derive(Debug, Clone)]
-pub struct ChangedFile {
-    pub path: PathBuf,
-    pub size: u64,
 }
 
 /// A parser for OCI-compliant container images represented as Tar blobs.
@@ -216,10 +218,18 @@ impl Parser {
                 let size = header.size().unwrap_or(0);
                 layer_size += size;
 
-                change_set.push(ChangedFile {
-                    path: path.into_owned(),
-                    size,
-                })
+                let file_status = if let Some(file_name) = path.file_name() {
+                    // Check if it's a whiteout
+                    if file_name.as_encoded_bytes().starts_with(b".wh.") {
+                        FileState::Deleted
+                    } else {
+                        FileState::Exists(size)
+                    }
+                } else {
+                    // We don't care about directories
+                    continue;
+                };
+                change_set.insert(path.into_owned(), file_status);
             }
         }
 
