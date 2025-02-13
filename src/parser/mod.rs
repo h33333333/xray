@@ -13,54 +13,29 @@ use anyhow::Context;
 use constants::{BLOB_PATH_PREFIX, SHA256_DIGEST_LENGTH, TAR_BLOCK_SIZE, TAR_MAGIC_NUMBER, TAR_MAGIC_NUMBER_START_IDX};
 use indexmap::IndexMap;
 use json::{ImageHistory, ImageLayerConfigs, JsonBlob};
-use nary_tree::{NodeId, Tree};
 use serde::de::DeserializeOwned;
 use tar::Archive;
 use util::{determine_blob_type, get_entry_size_in_blocks, sha256_digest_from_hex};
 
+use crate::tree::Tree;
+
 pub type Sha256Digest = [u8; SHA256_DIGEST_LENGTH];
-pub type LayerChangeSet = Tree<FileSystemNode>;
-
-#[derive(Debug)]
-pub struct FileSystemNode {
-    pub kind: NodeKind,
-    pub path: PathBuf,
-}
-
-impl Display for FileSystemNode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}: {:?}", self.kind, self.path)
-    }
-}
-
-impl FileSystemNode {
-    fn new_root() -> Self {
-        FileSystemNode {
-            kind: NodeKind::Directory(true),
-            path: Path::new("/").to_path_buf(),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum NodeKind {
-    File(FileState),
-    Directory(bool),
-}
+pub type LayerChangeSet = Tree<FileState, bool>;
 
 type LayerSize = u64;
 
 /// Represents state of a file in a layer.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub enum FileState {
     /// A file that exists in a layer with its size.
     Exists(u64),
     /// File that was deleted in this layer
+    #[default]
     Deleted,
 }
 
 /// A parsed OCI-compliant container image.
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct Image {
     /// The repository of the image.
     pub repository: String,
@@ -81,7 +56,6 @@ pub struct Image {
 }
 
 /// A single layer within the [Image].
-#[derive(Debug)]
 pub struct Layer {
     /// A [LayerChangeSet] for this layer.
     ///
@@ -96,7 +70,7 @@ pub struct Layer {
 }
 
 /// A parser for OCI-compliant container images represented as Tar blobs.
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct Parser {
     parsed_layers: HashMap<Sha256Digest, (LayerChangeSet, LayerSize)>,
     layer_configs: Option<ImageLayerConfigs>,
@@ -225,8 +199,6 @@ impl Parser {
         archive.set_ignore_zeros(true);
 
         let mut change_set = LayerChangeSet::new();
-        change_set.set_root(FileSystemNode::new_root());
-        let mut node_id_map: HashMap<PathBuf, NodeId> = HashMap::new();
 
         let mut layer_size = 0;
         for entry in archive
@@ -255,63 +227,23 @@ impl Parser {
                 let size = header.size().unwrap_or(0);
                 layer_size += size;
 
-                let mut components = path.components();
-                // HACK: remove the last element, as it's an actual file and should be processed separately
-                components.next_back();
-
-                let mut current_node_full_path = Path::new("/").to_path_buf();
-                // Do a single reallocation instead of multiple ones
-                current_node_full_path.reserve(path.as_os_str().len());
-
-                let mut current_node_id = change_set
-                    .root_id()
-                    .context("bug: root is missing even though we added it")?;
-
-                // Ensure that all directories exist
-                for directory in components {
-                    let mut current_node = change_set
-                        .get_mut(current_node_id)
-                        .context("bug: current node id points to an unexisting node")?;
-
-                    let path = Path::new(directory.as_os_str());
-                    current_node_full_path.push(path);
-
-                    current_node_id = if let Some(node_id) = node_id_map.get(&current_node_full_path) {
-                        *node_id
-                    } else {
-                        let new_node_id = current_node
-                            .append(FileSystemNode {
-                                kind: NodeKind::Directory(true),
-                                path: path.to_path_buf(),
-                            })
-                            .node_id();
-                        // FIXME: can this caching logic be improved? I don't want to allocate here
-                        node_id_map.insert(current_node_full_path.clone(), new_node_id);
-                        new_node_id
-                    };
-                }
-
-                // FIXME: handle opaque whiteouts
-                let (file_status, file_name) = if let Some(file_name) = path.file_name() {
+                let (file_state, file_name) = if let Some(file_name) = path.file_name() {
                     // Check if it's a whiteout
                     if file_name.as_encoded_bytes().starts_with(b".wh.") {
                         (FileState::Deleted, file_name)
-                    } else {
+                    } else if file_name.as_encoded_bytes() != b".wh..wh..opq" {
                         (FileState::Exists(size), file_name)
+                    } else {
+                        todo!();
                     }
                 } else {
                     // FIXME: can this even happen?
                     continue;
                 };
 
-                // Add the file itself
                 change_set
-                    .get_mut(current_node_id)
-                    .context("bug: current node id points to an unexisting node")?
-                    .append(FileSystemNode {
-                        kind: NodeKind::File(file_status),
-                        path: Path::new(file_name).to_path_buf(),
-                    });
+                    .insert(path, Tree::File(file_state))
+                    .context("failed to insert an entry");
             }
         }
 
