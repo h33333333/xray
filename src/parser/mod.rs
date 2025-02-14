@@ -2,12 +2,11 @@
 
 mod constants;
 mod json;
+mod tree;
 mod util;
 
 use std::collections::HashMap;
-use std::fmt::Display;
 use std::io::{Read, Seek};
-use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use constants::{BLOB_PATH_PREFIX, SHA256_DIGEST_LENGTH, TAR_BLOCK_SIZE, TAR_MAGIC_NUMBER, TAR_MAGIC_NUMBER_START_IDX};
@@ -15,12 +14,11 @@ use indexmap::IndexMap;
 use json::{ImageHistory, ImageLayerConfigs, JsonBlob};
 use serde::de::DeserializeOwned;
 use tar::Archive;
+use tree::Tree;
 use util::{determine_blob_type, get_entry_size_in_blocks, sha256_digest_from_hex};
 
-use crate::tree::Tree;
-
 pub type Sha256Digest = [u8; SHA256_DIGEST_LENGTH];
-pub type LayerChangeSet = Tree<FileState, bool>;
+pub type LayerChangeSet = Tree;
 
 type LayerSize = u64;
 
@@ -218,32 +216,31 @@ impl Parser {
                 return Ok((change_set, layer_size));
             }
 
-            if header.entry_type().is_dir() {
-                // We don't care about directories
-                continue;
-            }
-
             if let Ok(path) = header.path() {
-                let size = header.size().unwrap_or(0);
-                layer_size += size;
-
-                let (file_state, file_name) = if let Some(file_name) = path.file_name() {
-                    // Check if it's a whiteout
-                    if file_name.as_encoded_bytes().starts_with(b".wh.") {
-                        (FileState::Deleted, file_name)
-                    } else if file_name.as_encoded_bytes() != b".wh..wh..opq" {
-                        (FileState::Exists(size), file_name)
-                    } else {
-                        todo!();
-                    }
+                let node = if header.entry_type().is_dir() {
+                    Tree::new_empty_dir()
                 } else {
-                    // FIXME: can this even happen?
-                    continue;
+                    let size = header.size().unwrap_or(0);
+                    layer_size += size;
+
+                    let file_state = if let Some(file_name) = path.file_name() {
+                        // Check if it's a whiteout
+                        if file_name.as_encoded_bytes().starts_with(b".wh.") {
+                            FileState::Deleted
+                        } else if file_name.as_encoded_bytes() != b".wh..wh..opq" {
+                            FileState::Exists(size)
+                        } else {
+                            todo!("Handle opaque whiteouts");
+                        }
+                    } else {
+                        // FIXME: can this even happen?
+                        continue;
+                    };
+
+                    Tree::File(file_state)
                 };
 
-                change_set
-                    .insert(path, Tree::File(file_state))
-                    .context("failed to insert an entry");
+                change_set.insert(path, node).context("failed to insert an entry")?;
             }
         }
 
