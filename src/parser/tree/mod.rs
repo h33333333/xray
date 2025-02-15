@@ -10,6 +10,7 @@ use super::FileState;
 
 pub type DirMap = BTreeMap<PathBuf, Tree>;
 
+#[derive(Clone)]
 pub enum Tree {
     File(FileState),
     Directory((DirMap, bool)),
@@ -81,6 +82,29 @@ impl Tree {
         map.insert(node_name.into(), new_node);
 
         Ok(())
+    }
+
+    pub fn merge(mut self, other: Self) -> Self {
+        match (&mut self, other) {
+            (Tree::Directory((left_children, left_state)), Tree::Directory((right_children, right_state))) => {
+                for (path, right_node) in right_children {
+                    let updated_node = if let Some(left_node) = left_children.remove(&path) {
+                        left_node.merge(right_node)
+                    } else {
+                        right_node
+                    };
+                    left_children.insert(path, updated_node);
+                }
+                *left_state = right_state;
+            }
+            (Tree::File(left_state), Tree::File(right_state)) => *left_state = right_state,
+            (left_node, right_node) => {
+                // Can only happen if type of a node has changed.
+                // If this happens, then we simply want to replace the node altogether.
+                *left_node = right_node
+            }
+        }
+        self
     }
 }
 

@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 use super::action::AppAction;
 use super::util::copy_to_clipboard;
 use super::view::{ActivePane, ImageInfoPane, LayerInfoPane, LayerSelectorPane, Pane};
-use crate::parser::{Image, Layer, Sha256Digest};
+use crate::parser::{Image, Layer, LayerChangeSet, Sha256Digest};
 
 /// A Flux store that can handle a [Store::Action].
 pub trait Store {
@@ -43,8 +43,12 @@ impl AppState {
             image.os,
         ));
 
-        let (digest, _) = image.layers.get_index(0).context("got an image with 0 layers")?;
-        let layer_selector_pane = Pane::LayerSelector(LayerSelectorPane::new(*digest, 0));
+        let (digest, layer) = image.layers.get_index(0).context("got an image with 0 layers")?;
+        let layer_selector_pane = Pane::LayerSelector(LayerSelectorPane::new(
+            *digest,
+            0,
+            layer.changeset.clone().unwrap_or(LayerChangeSet::new_empty_dir()),
+        ));
         let layer_info_pane = Pane::LayerInfo(LayerInfoPane::default());
 
         let clipboard = Clipboard::new().ok();
@@ -80,6 +84,17 @@ impl AppState {
         self.layers
             .get_index(selected_layer_idx)
             .context("selected layer has an invalid index")
+    }
+
+    /// Returns a reference to the [LayerChangeSet] of the currently selected layers.
+    pub fn get_selected_layers_changeset(&self) -> anyhow::Result<&LayerChangeSet> {
+        let layer_selector_pane_idx: usize = ActivePane::LayerSelector.into();
+        let layer_selector_pane = &self.panes[layer_selector_pane_idx];
+        if let Pane::LayerSelector(pane) = layer_selector_pane {
+            Ok(pane.selected_layers_changeset())
+        } else {
+            anyhow::bail!("layer selector pane is no longer at the expected position in the UI");
+        }
     }
 }
 

@@ -20,7 +20,7 @@ use ratatui::widgets::{Block, BorderType, Paragraph, Widget, Wrap};
 use style::{text_color, ACTIVE_FIELD_STYLE, FIELD_KEY_STYLE, FIELD_VALUE_STYLE};
 use util::fields_into_lines;
 
-use crate::parser::{Layer, Sha256Digest};
+use crate::parser::{Layer, LayerChangeSet, Sha256Digest};
 use crate::tui::action::Direction;
 use crate::tui::store::AppState;
 use crate::tui::util::encode_hex;
@@ -93,7 +93,9 @@ impl Pane {
                 // FIXME: add a scrollbar in case the terminal's width is too small to fit everything
                 Ok(Paragraph::new(Text::from(lines)).wrap(Wrap { trim: true }).block(block))
             }
-            Pane::LayerInspector => Ok(Paragraph::new("Layer inspector").block(block)),
+            Pane::LayerInspector => {
+                Ok(Paragraph::new(format!("{:?}", state.get_selected_layers_changeset()?)).block(block))
+            }
         }
     }
 
@@ -109,6 +111,7 @@ impl Pane {
             Pane::LayerSelector(LayerSelectorPane {
                 selected_layer_digest,
                 selected_layer_idx,
+                selected_layers_changeset,
             }) => {
                 // FIXME: move this logic somewhere else
                 let current_layer_idx = *selected_layer_idx;
@@ -119,10 +122,26 @@ impl Pane {
 
                 let (digest, _) = layers
                     .get_index(next_layer_idx)
-                    .context("unnable find the next layer")?;
+                    .context("unnable to find the next layer")?;
+
+                let all_current_layers = layers
+                    .get_range(..next_layer_idx + 1)
+                    .context("bug: the next layer idx points to an invalid index")?;
+
+                let mut aggregated_layers = all_current_layers
+                    .get_index(0)
+                    .and_then(|(_, layer)| layer.changeset.clone())
+                    .unwrap_or(LayerChangeSet::new_empty_dir());
+
+                for (_, layer) in all_current_layers.get_range(1..).into_iter().flatten() {
+                    if let Some(changeset) = layer.changeset.as_ref() {
+                        aggregated_layers = aggregated_layers.merge(changeset.clone())
+                    }
+                }
 
                 *selected_layer_digest = *digest;
                 *selected_layer_idx = next_layer_idx;
+                *selected_layers_changeset = aggregated_layers;
             }
             Pane::LayerInfo(pane_state) => pane_state.active_field.toggle(direction),
             _ => {}

@@ -23,7 +23,7 @@ pub type LayerChangeSet = Tree;
 type LayerSize = u64;
 
 /// Represents state of a file in a layer.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub enum FileState {
     /// A file that exists in a layer with its size.
     Exists(u64),

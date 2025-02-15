@@ -2,7 +2,7 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 
 use super::style::layer_status_indicator_style;
-use crate::parser::{Layer, Sha256Digest};
+use crate::parser::{Layer, LayerChangeSet, Sha256Digest};
 use crate::tui::util::bytes_to_human_readable_units;
 
 #[derive(Debug)]
@@ -14,18 +14,25 @@ pub struct LayerSelectorPane {
     ///
     /// The index **must** be a valid index that points to an entry in [AppState::layers].
     pub selected_layer_idx: usize,
+    /// Either a changeset of a single layer or an aggregated changeset of multiple layers, depending on the chosen display mode.
+    pub selected_layers_changeset: LayerChangeSet,
 }
 
 impl LayerSelectorPane {
-    pub fn new(digest: Sha256Digest, idx: usize) -> Self {
+    pub fn new(digest: Sha256Digest, idx: usize, changeset: LayerChangeSet) -> Self {
         LayerSelectorPane {
             selected_layer_digest: digest,
             selected_layer_idx: idx,
+            selected_layers_changeset: changeset,
         }
     }
 
     pub fn selected_layer(&self) -> (&Sha256Digest, usize) {
         (&self.selected_layer_digest, self.selected_layer_idx)
+    }
+
+    pub fn selected_layers_changeset(&self) -> &LayerChangeSet {
+        &self.selected_layers_changeset
     }
 
     pub fn lines<'l>(
