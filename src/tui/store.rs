@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 
 use super::action::AppAction;
 use super::util::copy_to_clipboard;
-use super::view::{ActivePane, ImageInfoPane, LayerInfoPane, LayerSelectorPane, Pane};
+use super::view::{ActivePane, ImageInfoPane, LayerInfoPane, LayerInspectorPane, LayerSelectorPane, Pane};
 use crate::parser::{Image, Layer, LayerChangeSet, Sha256Digest};
 
 /// A Flux store that can handle a [Store::Action].
@@ -50,6 +50,7 @@ impl AppState {
             layer.changeset.clone().unwrap_or(LayerChangeSet::new_empty_dir()),
         ));
         let layer_info_pane = Pane::LayerInfo(LayerInfoPane::default());
+        let layer_inspector_pane = Pane::LayerInspector(LayerInspectorPane::default());
 
         let clipboard = Clipboard::new().ok();
 
@@ -57,7 +58,7 @@ impl AppState {
             image_info_pane,
             layer_info_pane,
             layer_selector_pane,
-            Pane::LayerInspector,
+            layer_inspector_pane,
         ];
 
         // Ensure that panes are always sorted by the render order, determined

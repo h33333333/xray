@@ -11,7 +11,7 @@ impl From<&Pane> for ActivePane {
             Pane::ImageInfo(..) => ActivePane::ImageInfo,
             Pane::LayerInfo(..) => ActivePane::LayerInfo,
             Pane::LayerSelector(..) => ActivePane::LayerSelector,
-            Pane::LayerInspector => ActivePane::LayerInspector,
+            Pane::LayerInspector(..) => ActivePane::LayerInspector,
         }
     }
 }

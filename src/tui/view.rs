@@ -6,7 +6,7 @@ use std::io;
 
 pub use active_pane::ActivePane;
 use anyhow::Context;
-pub use pane::{ImageInfoPane, LayerInfoPane, LayerSelectorPane, Pane};
+pub use pane::{ImageInfoPane, LayerInfoPane, LayerInspectorPane, LayerSelectorPane, Pane};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::{DefaultTerminal, Frame};
 

@@ -1,5 +1,6 @@
 mod image_info;
 mod layer_info;
+mod layer_inspector;
 mod layer_selector;
 mod style;
 mod util;
@@ -12,6 +13,7 @@ pub use image_info::ImageInfoPane;
 use indexmap::IndexMap;
 use layer_info::LayerInfoField;
 pub use layer_info::LayerInfoPane;
+pub use layer_inspector::LayerInspectorPane;
 pub use layer_selector::LayerSelectorPane;
 use ratatui::style::{Style, Stylize};
 use ratatui::text::Text;
@@ -36,7 +38,7 @@ pub enum Pane {
     LayerInfo(LayerInfoPane),
     /// Allows switching between [Layers](Layer) of the [crate::parser::Image].
     LayerSelector(LayerSelectorPane),
-    LayerInspector,
+    LayerInspector(LayerInspectorPane),
 }
 
 impl Pane {
@@ -93,7 +95,7 @@ impl Pane {
                 // FIXME: add a scrollbar in case the terminal's width is too small to fit everything
                 Ok(Paragraph::new(Text::from(lines)).wrap(Wrap { trim: true }).block(block))
             }
-            Pane::LayerInspector => {
+            Pane::LayerInspector(..) => {
                 Ok(Paragraph::new(format!("{:?}", state.get_selected_layers_changeset()?)).block(block))
             }
         }
@@ -206,7 +208,7 @@ impl Pane {
             Pane::ImageInfo(..) => "Image Information",
             Pane::LayerSelector(..) => "Layers",
             Pane::LayerInfo(..) => "Layer Information",
-            Pane::LayerInspector => "Layer Changes",
+            Pane::LayerInspector(..) => "Layer Changes",
         };
 
         if is_active {
