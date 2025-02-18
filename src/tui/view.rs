@@ -83,7 +83,11 @@ fn render(frame: &mut Frame, state: &AppState) -> anyhow::Result<()> {
     // Panes are always sorted by the render order, so we can just zip rects and panes here,
     // as the order won't change during runtime.
     for (pane_area, pane) in pane_areas.into_iter().zip(state.panes.iter()) {
-        frame.render_widget(pane.render(state).context("failed to render a frame")?, pane_area);
+        frame.render_widget(
+            pane.render(state, pane_area.height)
+                .context("failed to render a frame")?,
+            pane_area,
+        );
     }
 
     Ok(())

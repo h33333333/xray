@@ -88,7 +88,7 @@ impl AppState {
     }
 
     /// Returns a reference to the [LayerChangeSet] of the currently selected layers.
-    pub fn get_selected_layers_changeset(&self) -> anyhow::Result<&LayerChangeSet> {
+    pub fn get_selected_layers_changeset(&self) -> anyhow::Result<(&LayerChangeSet, usize)> {
         let layer_selector_pane_idx: usize = ActivePane::LayerSelector.into();
         let layer_selector_pane = &self.panes[layer_selector_pane_idx];
         if let Pane::LayerSelector(pane) = layer_selector_pane {

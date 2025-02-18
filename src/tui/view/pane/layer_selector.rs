@@ -15,15 +15,17 @@ pub struct LayerSelectorPane {
     /// The index **must** be a valid index that points to an entry in [AppState::layers].
     pub selected_layer_idx: usize,
     /// Either a changeset of a single layer or an aggregated changeset of multiple layers, depending on the chosen display mode.
-    pub selected_layers_changeset: LayerChangeSet,
+    /// Also contains stores the total number of entries (both files and directories) in this changeset.
+    pub selected_layers_changeset: (LayerChangeSet, usize),
 }
 
 impl LayerSelectorPane {
     pub fn new(digest: Sha256Digest, idx: usize, changeset: LayerChangeSet) -> Self {
+        let changeset_size = changeset.iter().count();
         LayerSelectorPane {
             selected_layer_digest: digest,
             selected_layer_idx: idx,
-            selected_layers_changeset: changeset,
+            selected_layers_changeset: (changeset, changeset_size),
         }
     }
 
@@ -31,8 +33,8 @@ impl LayerSelectorPane {
         (&self.selected_layer_digest, self.selected_layer_idx)
     }
 
-    pub fn selected_layers_changeset(&self) -> &LayerChangeSet {
-        &self.selected_layers_changeset
+    pub fn selected_layers_changeset(&self) -> (&LayerChangeSet, usize) {
+        (&self.selected_layers_changeset.0, self.selected_layers_changeset.1)
     }
 
     pub fn lines<'l>(

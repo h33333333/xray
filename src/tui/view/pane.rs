@@ -43,7 +43,7 @@ pub enum Pane {
 
 impl Pane {
     /// Returns a [Widget] that can be used to render the current pane in the terminal.
-    pub fn render<'a>(&'a self, state: &'a AppState) -> anyhow::Result<impl Widget + 'a> {
+    pub fn render<'a>(&'a self, state: &'a AppState, pane_rows: u16) -> anyhow::Result<impl Widget + 'a> {
         let pane_is_active = state.active_pane == self.into();
 
         let text_color = text_color(pane_is_active);
@@ -95,8 +95,15 @@ impl Pane {
                 // FIXME: add a scrollbar in case the terminal's width is too small to fit everything
                 Ok(Paragraph::new(Text::from(lines)).wrap(Wrap { trim: true }).block(block))
             }
-            Pane::LayerInspector(..) => {
-                Ok(Paragraph::new(format!("{:?}", state.get_selected_layers_changeset()?)).block(block))
+            Pane::LayerInspector(pane_state) => {
+                let (layer_changeset, changeset_size) = state.get_selected_layers_changeset()?;
+
+                // Two rows are taken by the block borders
+                let remaining_rows = pane_rows - 2;
+                let lines =
+                    pane_state.changeset_to_lines(layer_changeset, changeset_size, field_value_style, remaining_rows);
+
+                Ok(Paragraph::new(Text::from(lines)).block(block))
             }
         }
     }
@@ -141,12 +148,13 @@ impl Pane {
                     }
                 }
 
+                let aggregated_layers_changeset_size = aggregated_layers.iter().count();
                 *selected_layer_digest = *digest;
                 *selected_layer_idx = next_layer_idx;
-                *selected_layers_changeset = aggregated_layers;
+                *selected_layers_changeset = (aggregated_layers, aggregated_layers_changeset_size);
             }
             Pane::LayerInfo(pane_state) => pane_state.active_field.toggle(direction),
-            _ => {}
+            Pane::LayerInspector(pane_state) => pane_state.move_within_pane(direction),
         };
 
         Ok(())

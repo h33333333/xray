@@ -124,6 +124,13 @@ impl Tree {
         }
     }
 
+    pub fn size(&self) -> u64 {
+        match self {
+            Tree::File(FileState::Exists(size)) => *size,
+            _ => 0,
+        }
+    }
+
     pub fn iter(&self) -> NodeIter<'_> {
         NodeIter::new(self)
     }
