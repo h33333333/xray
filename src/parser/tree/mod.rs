@@ -18,17 +18,20 @@ pub enum Tree {
 
 impl std::fmt::Debug for Tree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut iter = self.iter().peekable();
-        // FIXME: make this better?
+        let mut iter = self.iter_with_levels();
         loop {
-            let Some((path, _, depth)) = iter.next() else { break };
-            for _ in 0..depth {
-                write!(f, "│   ")?;
+            let Some((path, _, depth, _)) = iter.next() else { break };
+            for level in 0..depth {
+                if iter.is_level_active(level).unwrap_or_default() {
+                    write!(f, "│   ")?;
+                } else {
+                    write!(f, "    ")?;
+                }
             }
-            if iter.peek().is_some_and(|(_, _, next_depth)| &depth <= next_depth) {
-                writeln!(f, "├── {path:?}")?;
+            if iter.is_level_active(depth).unwrap_or_default() {
+                writeln!(f, "├── {}", path.display())?;
             } else {
-                writeln!(f, "└── {path:?}")?;
+                writeln!(f, "└── {}", path.display())?;
             }
         }
         Ok(())
@@ -132,7 +135,11 @@ impl Tree {
     }
 
     pub fn iter(&self) -> NodeIter<'_> {
-        NodeIter::new(self)
+        NodeIter::new(self, false)
+    }
+
+    pub fn iter_with_levels(&self) -> NodeIter<'_> {
+        NodeIter::new(self, true)
     }
 }
 

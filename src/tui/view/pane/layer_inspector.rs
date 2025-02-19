@@ -46,31 +46,41 @@ impl LayerInspectorPane {
 
         let visible_rows: usize = visible_rows.into();
 
-        let rows_to_skip = if current_node_idx >= visible_rows {
-            // Always keep the currently selected node at the bottom
-            current_node_idx + 1 - visible_rows
-        } else {
-            0
-        };
-        let mut iter = changeset
-            .iter()
+        let rows_to_skip = current_node_idx.saturating_sub(visible_rows);
+
+        let mut active_levels = HashSet::new();
+        let iter = changeset
+            .iter_with_levels()
             .enumerate()
             // Also skip the "."
             .skip(rows_to_skip + 1)
             // No need to process more entries than we can display
-            .take(visible_rows)
-            .peekable();
-        while let Some((idx, (path, node, depth))) = iter.next() {
+            .take(visible_rows);
+        for (idx, (path, node, depth, is_level_active)) in iter {
+            if is_level_active {
+                active_levels.insert(depth)
+            } else {
+                active_levels.remove(&depth)
+            };
+
             let (node_size, unit) = bytes_to_human_readable_units(node.size());
 
             let mut spans = vec![Span::styled(
                 format!("   {:>5.1} {:<2}   ", node_size, unit.human_readable()),
                 field_value_style,
             )];
-            // Sub `1` from `depth` because we don't care about the "."
-            spans.extend((0..depth.saturating_sub(1)).map(|_| Span::styled("│   ", field_value_style)));
+            spans.extend((1..depth).map(|depth| {
+                // FIXME: this doesn't work because of skip
+                // - create a new iterator and make it track the active levels instead
+                let prefix = if active_levels.contains(&depth) {
+                    "│   "
+                } else {
+                    "    "
+                };
+                Span::styled(prefix, field_value_style)
+            }));
 
-            let path = if iter.peek().is_some_and(|(_, (_, _, next_depth))| &depth <= next_depth) {
+            let path = if is_level_active {
                 format!("├── {}", path.display())
             } else {
                 format!("└── {}", path.display())
