@@ -42,37 +42,24 @@ impl LayerInspectorPane {
             self.current_node_idx % changeset_size
         } else {
             self.current_node_idx
-        };
+        } + 1 /* skip the top-level element */;
 
         let visible_rows: usize = visible_rows.into();
-
         let rows_to_skip = current_node_idx.saturating_sub(visible_rows);
 
-        let mut active_levels = HashSet::new();
-        let iter = changeset
-            .iter_with_levels()
-            .enumerate()
-            // Also skip the "."
-            .skip(rows_to_skip + 1)
-            // No need to process more entries than we can display
-            .take(visible_rows);
-        for (idx, (path, node, depth, is_level_active)) in iter {
-            if is_level_active {
-                active_levels.insert(depth)
-            } else {
-                active_levels.remove(&depth)
-            };
-
+        let mut iter = changeset.iter_with_levels().enumerate();
+        // HACK: mimic the `Skip` combinator
+        iter.nth(rows_to_skip);
+        while let Some((idx, (path, node, depth, is_level_active))) = iter.next() {
             let (node_size, unit) = bytes_to_human_readable_units(node.size());
 
             let mut spans = vec![Span::styled(
                 format!("   {:>5.1} {:<2}   ", node_size, unit.human_readable()),
                 field_value_style,
             )];
+
             spans.extend((1..depth).map(|depth| {
-                // FIXME: this doesn't work because of skip
-                // - create a new iterator and make it track the active levels instead
-                let prefix = if active_levels.contains(&depth) {
+                let prefix = if iter.is_level_active(depth).unwrap_or(false) {
                     "│   "
                 } else {
                     "    "
@@ -94,7 +81,12 @@ impl LayerInspectorPane {
 
             spans.push(Span::styled(path, style.not_italic()));
 
-            lines.push(Line::from(spans))
+            lines.push(Line::from(spans));
+
+            // No need to process more entries than we can display
+            if lines.len() == visible_rows {
+                break;
+            }
         }
 
         lines

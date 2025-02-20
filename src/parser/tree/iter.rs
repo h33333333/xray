@@ -21,6 +21,10 @@ impl<'a> NodeIter<'a> {
     pub fn is_level_active(&self, level: usize) -> Option<bool> {
         self.active_levels.as_ref().map(|levels| levels.contains(&level))
     }
+
+    pub fn enumerate(self) -> EnumeratedNodeIter<'a> {
+        EnumeratedNodeIter::new(self)
+    }
 }
 
 impl<'a> Iterator for NodeIter<'a> {
@@ -50,5 +54,31 @@ impl<'a> Iterator for NodeIter<'a> {
         }
 
         Some((path, next_node, depth, is_level_active))
+    }
+}
+
+pub struct EnumeratedNodeIter<'a> {
+    inner: NodeIter<'a>,
+    count: usize,
+}
+
+impl<'a> EnumeratedNodeIter<'a> {
+    fn new(inner: NodeIter<'a>) -> Self {
+        EnumeratedNodeIter { inner, count: 0 }
+    }
+
+    pub fn is_level_active(&self, level: usize) -> Option<bool> {
+        self.inner.is_level_active(level)
+    }
+}
+
+impl<'a> Iterator for EnumeratedNodeIter<'a> {
+    type Item = (usize, (&'a Path, &'a Tree, usize, bool));
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let idx = self.count;
+        let item = self.inner.next()?;
+        self.count += 1;
+        Some((idx, item))
     }
 }
