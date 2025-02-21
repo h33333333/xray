@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use ratatui::style::{Color, Style, Stylize};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 
 use crate::parser::LayerChangeSet;
@@ -31,18 +31,14 @@ impl LayerInspectorPane {
     pub fn changeset_to_lines<'a>(
         &self,
         changeset: &'a LayerChangeSet,
-        changeset_size: usize,
-        field_value_style: Style,
+        _changeset_size: usize,
+        get_node_style: impl Fn(bool) -> Style,
         visible_rows: u16,
     ) -> Vec<Line<'a>> {
         let mut lines = vec![];
 
         // FIXME: this is very bad (and also wrong). I need to move this logic to the `move_within_pane` method
-        let current_node_idx = if self.current_node_idx >= changeset_size {
-            self.current_node_idx % changeset_size
-        } else {
-            self.current_node_idx
-        } + 1 /* skip the top-level element */;
+        let current_node_idx = self.current_node_idx + 1 /* skip the top-level element */;
 
         let visible_rows: usize = visible_rows.into();
         let rows_to_skip = current_node_idx.saturating_sub(visible_rows);
@@ -50,37 +46,32 @@ impl LayerInspectorPane {
         let mut iter = changeset.iter_with_levels().enumerate();
         // HACK: mimic the `Skip` combinator
         iter.nth(rows_to_skip);
-        while let Some((idx, (path, node, depth, is_level_active))) = iter.next() {
+        while let Some((idx, (path, node, depth, level_is_active))) = iter.next() {
             let (node_size, unit) = bytes_to_human_readable_units(node.size());
+            let node_is_active = idx == current_node_idx;
 
             let mut spans = vec![Span::styled(
                 format!("   {:>5.1} {:<2}   ", node_size, unit.human_readable()),
-                field_value_style,
+                get_node_style(node_is_active),
             )];
 
+            // Skip the `0` depth, as it's only for the '.' node
             spans.extend((1..depth).map(|depth| {
                 let prefix = if iter.is_level_active(depth).unwrap_or(false) {
                     "│   "
                 } else {
                     "    "
                 };
-                Span::styled(prefix, field_value_style)
+                Span::styled(prefix, get_node_style(node_is_active))
             }));
 
-            let path = if is_level_active {
+            let path = if level_is_active {
                 format!("├── {}", path.display())
             } else {
                 format!("└── {}", path.display())
             };
 
-            let style = if idx == current_node_idx {
-                field_value_style.bg(Color::White).fg(Color::Black)
-            } else {
-                field_value_style
-            };
-
-            spans.push(Span::styled(path, style.not_italic()));
-
+            spans.push(Span::styled(path, get_node_style(node_is_active)));
             lines.push(Line::from(spans));
 
             // No need to process more entries than we can display

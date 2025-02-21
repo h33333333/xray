@@ -3,13 +3,14 @@ use std::cmp::Ordering;
 use ratatui::style::{Color, Modifier, Style};
 
 pub const FIELD_KEY_STYLE: Style = Style::new().add_modifier(Modifier::BOLD);
-pub const FIELD_VALUE_STYLE: Style = Style::new().add_modifier(Modifier::ITALIC);
+pub const FIELD_VALUE_STYLE: Style = Style::new();
 pub const ACTIVE_FIELD_STYLE: Style = Style::new().add_modifier(Modifier::UNDERLINED);
 pub const FIELD_VALUE_DELIMITER: &str = ": ";
+pub const ACTIVE_INSPECTOR_NODE_STYLE: Style = Style::new().fg(Color::Black).bg(Color::White);
 
 /// Returns the [Color] of the text based on whether its parent [Pane](super::Pane) is active.
-pub fn text_color(is_active: bool) -> Color {
-    if is_active {
+pub fn text_color(pane_is_active: bool) -> Color {
+    if pane_is_active {
         Color::White
     } else {
         Color::Gray

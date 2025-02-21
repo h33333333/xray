@@ -19,7 +19,7 @@ use ratatui::style::{Style, Stylize};
 use ratatui::text::Text;
 use ratatui::widgets::block::Title;
 use ratatui::widgets::{Block, BorderType, Paragraph, Widget, Wrap};
-use style::{text_color, ACTIVE_FIELD_STYLE, FIELD_KEY_STYLE, FIELD_VALUE_STYLE};
+use style::{text_color, ACTIVE_FIELD_STYLE, ACTIVE_INSPECTOR_NODE_STYLE, FIELD_KEY_STYLE, FIELD_VALUE_STYLE};
 use util::fields_into_lines;
 
 use crate::parser::{Layer, LayerChangeSet, Sha256Digest};
@@ -100,8 +100,19 @@ impl Pane {
 
                 // Two rows are taken by the block borders
                 let remaining_rows = pane_rows - 2;
-                let lines =
-                    pane_state.changeset_to_lines(layer_changeset, changeset_size, field_value_style, remaining_rows);
+                let lines = pane_state.changeset_to_lines(
+                    layer_changeset,
+                    changeset_size,
+                    |node_is_active| {
+                        if node_is_active && pane_is_active {
+                            // Underlining doesn't look that good in the file tree, so just use a standard BoW outline
+                            ACTIVE_INSPECTOR_NODE_STYLE
+                        } else {
+                            field_value_style
+                        }
+                    },
+                    remaining_rows,
+                );
 
                 Ok(Paragraph::new(Text::from(lines)).block(block))
             }
