@@ -10,7 +10,6 @@ use std::borrow::Cow;
 use anyhow::Context;
 use image_info::ImageInfoField;
 pub use image_info::ImageInfoPane;
-use indexmap::IndexMap;
 use layer_info::LayerInfoField;
 pub use layer_info::LayerInfoPane;
 pub use layer_inspector::LayerInspectorPane;
@@ -22,7 +21,7 @@ use ratatui::widgets::{Block, BorderType, Paragraph, Widget, Wrap};
 use style::{text_color, ACTIVE_FIELD_STYLE, ACTIVE_INSPECTOR_NODE_STYLE, FIELD_KEY_STYLE, FIELD_VALUE_STYLE};
 use util::fields_into_lines;
 
-use crate::parser::{Layer, LayerChangeSet, Sha256Digest};
+use crate::parser::LayerChangeSet;
 use crate::tui::action::Direction;
 use crate::tui::store::AppState;
 use crate::tui::util::encode_hex;
@@ -120,12 +119,7 @@ impl Pane {
     }
 
     /// Moves to the next entry in the specified [Direction] inside the [Pane].
-    // FIXME: passing `layers` here is ugly. Can I do something about it?
-    pub fn move_within_pane(
-        &mut self,
-        direction: Direction,
-        layers: &IndexMap<Sha256Digest, Layer>,
-    ) -> anyhow::Result<()> {
+    pub fn move_within_pane(&mut self, direction: Direction, state: &AppState) -> anyhow::Result<()> {
         match self {
             Pane::ImageInfo(ImageInfoPane { active_field, .. }) => active_field.toggle(direction),
             Pane::LayerSelector(LayerSelectorPane {
@@ -136,15 +130,17 @@ impl Pane {
                 // FIXME: move this logic somewhere else
                 let current_layer_idx = *selected_layer_idx;
                 let next_layer_idx = match direction {
-                    Direction::Forward => (current_layer_idx + 1) % layers.len(),
-                    Direction::Backward => (current_layer_idx + layers.len() - 1) % layers.len(),
+                    Direction::Forward => (current_layer_idx + 1) % state.layers.len(),
+                    Direction::Backward => (current_layer_idx + state.layers.len() - 1) % state.layers.len(),
                 };
 
-                let (digest, _) = layers
+                let (digest, _) = state
+                    .layers
                     .get_index(next_layer_idx)
                     .context("unnable to find the next layer")?;
 
-                let all_current_layers = layers
+                let all_current_layers = state
+                    .layers
                     .get_range(..next_layer_idx + 1)
                     .context("bug: the next layer idx points to an invalid index")?;
 
@@ -165,7 +161,7 @@ impl Pane {
                 *selected_layers_changeset = (aggregated_layers, aggregated_layers_changeset_size);
             }
             Pane::LayerInfo(pane_state) => pane_state.active_field.toggle(direction),
-            Pane::LayerInspector(pane_state) => pane_state.move_within_pane(direction),
+            Pane::LayerInspector(pane_state) => pane_state.move_within_pane(direction, state)?,
         };
 
         Ok(())

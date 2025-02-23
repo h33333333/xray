@@ -5,6 +5,7 @@ use ratatui::text::{Line, Span};
 
 use crate::parser::LayerChangeSet;
 use crate::tui::action::Direction;
+use crate::tui::store::AppState;
 use crate::tui::util::bytes_to_human_readable_units;
 
 /// [super::Pane::LayerInspector]'s pane state.
@@ -37,9 +38,9 @@ impl LayerInspectorPane {
     ) -> Vec<Line<'a>> {
         let mut lines = vec![];
 
-        // FIXME: this is very bad (and also wrong). I need to move this logic to the `move_within_pane` method
         let current_node_idx = self.current_node_idx + 1 /* skip the top-level element */;
 
+        // TODO: I need to make the directories collapsible
         let visible_rows: usize = visible_rows.into();
         let rows_to_skip = current_node_idx.saturating_sub(visible_rows);
 
@@ -83,10 +84,19 @@ impl LayerInspectorPane {
         lines
     }
 
-    pub fn move_within_pane(&mut self, direction: Direction) {
+    pub fn move_within_pane(&mut self, direction: Direction, state: &AppState) -> anyhow::Result<()> {
+        let (_, total_nodes) = state.get_selected_layers_changeset()?;
+        let total_nodes = total_nodes - 1 /* ignore the "." elemeent */;
         match direction {
-            Direction::Forward => self.current_node_idx = self.current_node_idx.saturating_add(1),
-            Direction::Backward => self.current_node_idx = self.current_node_idx.saturating_sub(1),
+            Direction::Forward => self.current_node_idx = (self.current_node_idx + 1) % total_nodes,
+            Direction::Backward => {
+                self.current_node_idx = self
+                    .current_node_idx
+                    .checked_sub(1)
+                    .unwrap_or(total_nodes - 1 /* we need a zero-based index here */)
+            }
         }
+
+        Ok(())
     }
 }

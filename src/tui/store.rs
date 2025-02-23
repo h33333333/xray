@@ -20,7 +20,7 @@ pub struct AppState {
     /// All the [Panes](Pane) sorted by their render order.
     ///
     /// Check docs of [ActivePane] to understand how panes are ordered.
-    pub panes: [Pane; 4],
+    pub panes: [Option<Pane>; 4],
     /// The currently selected pane.
     pub active_pane: ActivePane,
     /// A [Clipboard] that is used for handling of [AppAction::Copy].
@@ -55,15 +55,15 @@ impl AppState {
         let clipboard = Clipboard::new().ok();
 
         let mut panes = [
-            image_info_pane,
-            layer_info_pane,
-            layer_selector_pane,
-            layer_inspector_pane,
+            Some(image_info_pane),
+            Some(layer_info_pane),
+            Some(layer_selector_pane),
+            Some(layer_inspector_pane),
         ];
 
         // Ensure that panes are always sorted by the render order, determined
         // by the order of enum's variants declaration.
-        panes.sort_by_key(|a| Into::<usize>::into(Into::<ActivePane>::into(a)));
+        panes.sort_by_key(|a| Into::<usize>::into(Into::<ActivePane>::into(a.as_ref().unwrap())));
 
         Ok(AppState {
             panes,
@@ -77,7 +77,7 @@ impl AppState {
     pub fn get_selected_layer(&self) -> anyhow::Result<(&Sha256Digest, &Layer)> {
         let layer_selector_pane_idx: usize = ActivePane::LayerSelector.into();
         let layer_selector_pane = &self.panes[layer_selector_pane_idx];
-        let selected_layer_idx = if let Pane::LayerSelector(pane) = layer_selector_pane {
+        let selected_layer_idx = if let Some(Pane::LayerSelector(pane)) = layer_selector_pane {
             pane.selected_layer().1
         } else {
             anyhow::bail!("layer selector pane is no longer at the expected position in the UI");
@@ -91,11 +91,18 @@ impl AppState {
     pub fn get_selected_layers_changeset(&self) -> anyhow::Result<(&LayerChangeSet, usize)> {
         let layer_selector_pane_idx: usize = ActivePane::LayerSelector.into();
         let layer_selector_pane = &self.panes[layer_selector_pane_idx];
-        if let Pane::LayerSelector(pane) = layer_selector_pane {
+        if let Some(Pane::LayerSelector(pane)) = layer_selector_pane {
             Ok(pane.selected_layers_changeset())
         } else {
             anyhow::bail!("layer selector pane is no longer at the expected position in the UI");
         }
+    }
+
+    fn get_active_pane(&self) -> anyhow::Result<&Pane> {
+        self.panes
+            .get(Into::<usize>::into(self.active_pane))
+            .and_then(|pane| pane.as_ref())
+            .with_context(|| format!("bug: pane {:?} is no longer at its expected place", self.active_pane))
     }
 }
 
@@ -106,9 +113,18 @@ impl Store for AppState {
         match action {
             AppAction::Empty => tracing::trace!("Received an empty event"),
             AppAction::TogglePane(direction) => self.active_pane.toggle(direction),
-            AppAction::Move(direction) => self.panes[Into::<usize>::into(self.active_pane)]
-                .move_within_pane(direction, &self.layers)
-                .context("error while handling the 'move' action")?,
+            AppAction::Move(direction) => {
+                let active_pane_idx = Into::<usize>::into(self.active_pane);
+                // HACK: take the pane here in order to be able to provide a reference to the state when handling the action.
+                let mut active_pane = self.panes[active_pane_idx]
+                    .take()
+                    .with_context(|| format!("bug: forgot to return the {} pane?", active_pane_idx))?;
+                active_pane
+                    .move_within_pane(direction, self)
+                    .context("error while handling the 'move' action")?;
+                // Return the pane back
+                self.panes[active_pane_idx].replace(active_pane);
+            }
             AppAction::Copy => {
                 if self.clipboard.is_none() {
                     tracing::trace!("Can't copy: no clipboard is available");
@@ -117,7 +133,7 @@ impl Store for AppState {
 
                 // HACK: take the clipboard here to avoid fighting the borrow checker in the next block
                 let mut clipboard = self.clipboard.take();
-                if let Some(text_to_copy) = self.panes[Into::<usize>::into(self.active_pane)].get_selected_field(self) {
+                if let Some(text_to_copy) = self.get_active_pane()?.get_selected_field(self) {
                     copy_to_clipboard(clipboard.as_mut(), text_to_copy);
                 }
                 // Return the clipboard where it belongs

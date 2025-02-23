@@ -84,7 +84,9 @@ fn render(frame: &mut Frame, state: &AppState) -> anyhow::Result<()> {
     // as the order won't change during runtime.
     for (pane_area, pane) in pane_areas.into_iter().zip(state.panes.iter()) {
         frame.render_widget(
-            pane.render(state, pane_area.height)
+            pane.as_ref()
+                .context("bug: pane wasn't returned back after an operation")?
+                .render(state, pane_area.height)
                 .context("failed to render a frame")?,
             pane_area,
         );
