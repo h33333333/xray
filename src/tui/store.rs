@@ -113,15 +113,21 @@ impl Store for AppState {
         match action {
             AppAction::Empty => tracing::trace!("Received an empty event"),
             AppAction::TogglePane(direction) => self.active_pane.toggle(direction),
-            AppAction::Move(direction) => {
+            action @ (AppAction::Interact | AppAction::Move(..)) => {
                 let active_pane_idx = Into::<usize>::into(self.active_pane);
                 // HACK: take the pane here in order to be able to provide a reference to the state when handling the action.
                 let mut active_pane = self.panes[active_pane_idx]
                     .take()
                     .with_context(|| format!("bug: forgot to return the {} pane?", active_pane_idx))?;
-                active_pane
-                    .move_within_pane(direction, self)
-                    .context("error while handling the 'move' action")?;
+                match action {
+                    AppAction::Interact => active_pane
+                        .interact_within_pane(self)
+                        .context("error while handling the 'interact' action")?,
+                    AppAction::Move(direction) => active_pane
+                        .move_within_pane(direction, self)
+                        .context("error while handling the 'move' action")?,
+                    _ => unreachable!("Checked above"),
+                };
                 // Return the pane back
                 self.panes[active_pane_idx].replace(active_pane);
             }

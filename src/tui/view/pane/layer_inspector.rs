@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use anyhow::Context;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 
@@ -85,11 +86,31 @@ impl LayerInspectorPane {
     }
 
     pub fn move_within_pane(&mut self, direction: Direction, state: &AppState) -> anyhow::Result<()> {
-        let (_, total_nodes) = state.get_selected_layers_changeset()?;
+        let (tree, total_nodes) = state.get_selected_layers_changeset()?;
         let total_nodes = total_nodes - 1 /* ignore the "." elemeent */;
+
+        let n_of_current_node_child_nodes = self
+            .is_current_node_collapsed()
+            .then(|| {
+                if let Some((_, (_, current_node, _, _))) = tree.iter().enumerate().nth(self.current_node_idx + 1) {
+                    current_node.get_n_of_child_nodes()
+                } else {
+                    tracing::debug!(
+                        current_node_idx = self.current_node_idx,
+                        "Layer inspector: current node has invalid index"
+                    );
+                    None
+                }
+            })
+            .flatten();
+
         match direction {
-            Direction::Forward => self.current_node_idx = (self.current_node_idx + 1) % total_nodes,
+            Direction::Forward => {
+                self.current_node_idx =
+                    (self.current_node_idx + 1 + n_of_current_node_child_nodes.unwrap_or(0)) % total_nodes
+            }
             Direction::Backward => {
+                // TODO: get children of current_node - 1
                 self.current_node_idx = self
                     .current_node_idx
                     .checked_sub(1)
@@ -98,5 +119,25 @@ impl LayerInspectorPane {
         }
 
         Ok(())
+    }
+
+    pub fn toggle_active_node(&mut self, state: &AppState) -> anyhow::Result<()> {
+        let (tree, _) = state.get_selected_layers_changeset()?;
+        let (_, (_, current_node, _, _)) = tree
+            .iter()
+            .enumerate()
+            .nth(self.current_node_idx + 1)
+            .context("bug: current node has invalid index")?;
+
+        // Mark current directory as collapsed
+        if current_node.is_dir() && self.collapsed_nodes.take(&self.current_node_idx).is_none() {
+            self.collapsed_nodes.insert(self.current_node_idx);
+        }
+
+        Ok(())
+    }
+
+    fn is_current_node_collapsed(&self) -> bool {
+        self.collapsed_nodes.contains(&self.current_node_idx)
     }
 }

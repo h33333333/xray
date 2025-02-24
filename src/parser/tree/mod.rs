@@ -141,6 +141,15 @@ impl Tree {
     pub fn iter_with_levels(&self) -> NodeIter<'_> {
         NodeIter::new(self, true)
     }
+
+    pub fn get_n_of_child_nodes(&self) -> Option<usize> {
+        let children = self.children()?;
+        let mut n_of_children = children.len();
+        for (_, child_node) in children.iter() {
+            n_of_children += child_node.get_n_of_child_nodes().unwrap_or(0)
+        }
+        Some(n_of_children)
+    }
 }
 
 impl Default for Tree {

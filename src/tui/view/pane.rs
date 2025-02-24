@@ -202,6 +202,20 @@ impl Pane {
         }
     }
 
+    /// Interacts with the currently active element inside the [Pane].
+    ///
+    /// The actual action depends on the currently active [Pane] and its state.
+    pub fn interact_within_pane(&mut self, state: &AppState) -> anyhow::Result<()> {
+        // Only the inspector pane supports this action for now.
+        if let Pane::LayerInspector(pane_state) = self {
+            pane_state
+                .toggle_active_node(state)
+                .context("layer inspector: failed to toggle the active node")?;
+        };
+
+        Ok(())
+    }
+
     /// Returns a styled [Block] for the pane.
     fn get_styled_block(&self, is_active: bool) -> Block<'_> {
         let (border_type, border_style) = if is_active {

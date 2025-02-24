@@ -7,6 +7,8 @@ pub enum AppAction {
     TogglePane(Direction),
     /// Move in the specified [Direction] within the currently selected [super::view::Pane].
     Move(Direction),
+    /// Interact with the currently selected element within the currently selected [super::view::Pane].
+    Interact,
     /// Copy the currently selected field into the system clipboard.
     ///
     /// What is copied is up to the currently active pane.
