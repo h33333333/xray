@@ -99,19 +99,21 @@ impl Pane {
 
                 // Two rows are taken by the block borders
                 let remaining_rows = pane_rows - 2;
-                let lines = pane_state.changeset_to_lines(
-                    layer_changeset,
-                    changeset_size,
-                    |node_is_active| {
-                        if node_is_active && pane_is_active {
-                            // Underlining doesn't look that good in the file tree, so just use a standard BoW outline
-                            ACTIVE_INSPECTOR_NODE_STYLE
-                        } else {
-                            field_value_style
-                        }
-                    },
-                    remaining_rows,
-                );
+                let lines = pane_state
+                    .changeset_to_lines(
+                        layer_changeset,
+                        changeset_size,
+                        |node_is_active| {
+                            if node_is_active && pane_is_active {
+                                // Underlining doesn't look that good in the file tree, so just use a standard BoW outline
+                                ACTIVE_INSPECTOR_NODE_STYLE
+                            } else {
+                                field_value_style
+                            }
+                        },
+                        remaining_rows,
+                    )
+                    .context("layer inspector: failed to render a changeset")?;
 
                 Ok(Paragraph::new(Text::from(lines)).block(block))
             }
