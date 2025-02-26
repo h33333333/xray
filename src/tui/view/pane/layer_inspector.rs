@@ -51,13 +51,11 @@ impl LayerInspectorPane {
         let current_node_idx = self.current_node_idx + 1 /* skip the top-level element */;
 
         let visible_rows: usize = visible_rows.into();
-        let rows_to_skip = current_node_idx.saturating_sub(visible_rows);
+        let nodes_to_skip = self.nodes_to_skip_before_current_node(visible_rows);
 
-        let mut iter = changeset.iter_with_levels().enumerate();
-        // HACK: mimic the `Skip` combinator
-        iter.nth(rows_to_skip);
+        let mut iter = changeset.iter_with_levels().enumerate(); // HACK: mimic the `Skip` combinator
+        iter.nth(nodes_to_skip);
         'outer: while let Some((idx, (path, node, depth, level_is_active))) = iter.next() {
-            // FIXME: this implementation is wrong - the logic should be moved to the iterator.
             // Check if any parent of this node is collapsed
             for (node_idx, n_of_children) in self
                 .collapsed_nodes
@@ -70,7 +68,6 @@ impl LayerInspectorPane {
                 }
             }
 
-            // Account for the "." node that is skipped.
             let (node_size, unit) = bytes_to_human_readable_units(node.size());
             let node_is_active = idx == current_node_idx;
 
@@ -199,5 +196,21 @@ impl LayerInspectorPane {
 
     fn is_current_node_collapsed(&self) -> bool {
         self.is_node_collapsed(self.current_node_idx)
+    }
+
+    fn nodes_to_skip_before_current_node(&self, visible_rows: usize) -> usize {
+        let mut hidden_nodes_before_current = 0;
+        let mut iter = self
+            .collapsed_nodes
+            .iter()
+            .take_while(|(&idx, _)| idx < self.current_node_idx);
+        let mut next_item = iter.next();
+        while let Some((idx, children)) = next_item {
+            hidden_nodes_before_current += children;
+            // Skip children of the item that we just processed
+            next_item = iter.find(|(&next_idx, _)| next_idx > idx + children);
+        }
+
+        (self.current_node_idx - hidden_nodes_before_current + 1).saturating_sub(visible_rows)
     }
 }
