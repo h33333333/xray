@@ -207,10 +207,26 @@ impl LayerInspectorPane {
         let mut next_item = iter.next();
         while let Some((idx, children)) = next_item {
             hidden_nodes_before_current += children;
-            // Skip children of the item that we just processed
             next_item = iter.find(|(&next_idx, _)| next_idx > idx + children);
         }
 
-        (self.current_node_idx - hidden_nodes_before_current + 1).saturating_sub(visible_rows)
+        let mut nodes_to_skip = (self.current_node_idx + 1 - hidden_nodes_before_current).saturating_sub(visible_rows);
+
+        tracing::debug!(
+            current_node = self.current_node_idx,
+            nodes_to_skip,
+            hidden_nodes_before_current,
+            "nodes to skip"
+        );
+        for (idx, children) in self
+            .collapsed_nodes
+            .iter()
+            .take_while(|(&idx, _)| idx < self.current_node_idx)
+        {
+            if (*idx + 1) <= nodes_to_skip {
+                nodes_to_skip += children;
+            }
+        }
+        nodes_to_skip
     }
 }
