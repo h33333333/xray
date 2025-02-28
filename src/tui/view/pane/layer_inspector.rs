@@ -24,6 +24,8 @@ const EXPANDED_NODE_STATUS_INDICATOR: &str = "─";
 pub struct LayerInspectorPane {
     /// Index of the currently selected node in the tree.
     pub current_node_idx: usize,
+    /// Number of collapsed nodes before the current one
+    pub collapsed_nodes_before_current: usize,
     /// Maps indexes of all nodes that are collapsed to the number of their children.
     pub collapsed_nodes: BTreeMap<usize, usize>,
 }
@@ -139,8 +141,15 @@ impl LayerInspectorPane {
 
         match direction {
             Direction::Forward => {
-                self.current_node_idx =
-                    (self.current_node_idx + 1 + n_of_current_node_child_nodes.unwrap_or(0)) % total_nodes
+                let new_node_idx =
+                    (self.current_node_idx + 1 + n_of_current_node_child_nodes.unwrap_or(0)) % total_nodes;
+                self.current_node_idx = new_node_idx;
+                let new_n_of_collapsed_nodes = if new_node_idx == 0 {
+                    0
+                } else {
+                    self.collapsed_nodes_before_current + n_of_current_node_child_nodes.unwrap_or(0)
+                };
+                self.collapsed_nodes_before_current = new_n_of_collapsed_nodes;
             }
             Direction::Backward => {
                 // Basic idx calculations
@@ -150,19 +159,24 @@ impl LayerInspectorPane {
                     .unwrap_or(total_nodes - 1 /* we need a zero-based index here */);
 
                 // Iterate starting from the topmost nodes and find the first node that is collapsed and that the calculated next node is the child of.
-                for (node_idx, n_of_children) in self
-                    .collapsed_nodes
-                    .iter()
-                    .take_while(|(&node_idx, _)| node_idx < next_node_idx)
-                {
+                let mut collapsed_nodes_before_next_node = 0;
+                let mut iter = self.collapsed_nodes.iter().take_while(|(&idx, _)| idx < next_node_idx);
+                let mut next_item = iter.next();
+                while let Some((node_idx, n_of_children)) = next_item {
                     if node_idx + n_of_children >= next_node_idx {
                         // If we find such a node, jump to it instead of a node at the calculated index.
                         next_node_idx = *node_idx;
                         break;
                     }
+                    collapsed_nodes_before_next_node += n_of_children;
+
+                    next_item = iter.find(|(&next_idx, &next_n_of_children)| {
+                        next_idx > node_idx + n_of_children || next_idx + next_n_of_children >= next_node_idx
+                    });
                 }
 
                 self.current_node_idx = next_node_idx;
+                self.collapsed_nodes_before_current = collapsed_nodes_before_next_node;
             }
         }
 
@@ -199,34 +213,23 @@ impl LayerInspectorPane {
     }
 
     fn nodes_to_skip_before_current_node(&self, visible_rows: usize) -> usize {
-        let mut hidden_nodes_before_current = 0;
+        // Calculate nodes_to_skip adjusted for the collapsed directories
+        let mut nodes_to_skip =
+            (self.current_node_idx + 1 - self.collapsed_nodes_before_current).saturating_sub(visible_rows);
+
         let mut iter = self
             .collapsed_nodes
             .iter()
             .take_while(|(&idx, _)| idx < self.current_node_idx);
         let mut next_item = iter.next();
         while let Some((idx, children)) = next_item {
-            hidden_nodes_before_current += children;
-            next_item = iter.find(|(&next_idx, _)| next_idx > idx + children);
-        }
-
-        let mut nodes_to_skip = (self.current_node_idx + 1 - hidden_nodes_before_current).saturating_sub(visible_rows);
-
-        tracing::debug!(
-            current_node = self.current_node_idx,
-            nodes_to_skip,
-            hidden_nodes_before_current,
-            "nodes to skip"
-        );
-        for (idx, children) in self
-            .collapsed_nodes
-            .iter()
-            .take_while(|(&idx, _)| idx < self.current_node_idx)
-        {
             if (*idx + 1) <= nodes_to_skip {
                 nodes_to_skip += children;
             }
+
+            next_item = iter.find(|(&next_idx, _)| next_idx > idx + children);
         }
+
         nodes_to_skip
     }
 }
