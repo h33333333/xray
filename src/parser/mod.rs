@@ -7,6 +7,7 @@ mod util;
 
 use std::collections::HashMap;
 use std::io::{Read, Seek};
+use std::path::PathBuf;
 
 use anyhow::Context;
 use constants::{BLOB_PATH_PREFIX, SHA256_DIGEST_LENGTH, TAR_BLOCK_SIZE, TAR_MAGIC_NUMBER, TAR_MAGIC_NUMBER_START_IDX};
@@ -30,6 +31,8 @@ pub enum FileState {
     /// File that was deleted in this layer
     #[default]
     Deleted,
+    /// A hardlink/symlink that links to the contained [PathBuf].
+    Link(PathBuf),
 }
 
 /// A parsed OCI-compliant container image.
@@ -223,19 +226,22 @@ impl Parser {
                     let size = header.size().unwrap_or(0);
                     layer_size += size;
 
-                    let file_state = if let Some(file_name) = path.file_name() {
-                        // Check if it's a whiteout
-                        if file_name.as_encoded_bytes().starts_with(b".wh.") {
-                            FileState::Deleted
-                        } else if file_name.as_encoded_bytes() != b".wh..wh..opq" {
-                            FileState::Exists(size)
+                    let file_state =
+                        if let Some(link) = header.link_name().context("failed to retrieve the link name")? {
+                            FileState::Link(link.into_owned())
+                        } else if let Some(file_name) = path.file_name() {
+                            // Check if it's a whiteout
+                            if file_name.as_encoded_bytes().starts_with(b".wh.") {
+                                FileState::Deleted
+                            } else if file_name.as_encoded_bytes() != b".wh..wh..opq" {
+                                FileState::Exists(size)
+                            } else {
+                                // Simply ignoring opaque whiteouts does the trick
+                                continue;
+                            }
                         } else {
-                            todo!("Handle opaque whiteouts");
-                        }
-                    } else {
-                        // FIXME: can this even happen?
-                        continue;
-                    };
+                            continue;
+                        };
 
                     Tree::File(file_state)
                 };

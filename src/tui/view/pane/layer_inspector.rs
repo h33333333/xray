@@ -5,7 +5,7 @@ use anyhow::Context;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 
-use crate::parser::LayerChangeSet;
+use crate::parser::{FileState, LayerChangeSet};
 use crate::tui::action::Direction;
 use crate::tui::store::AppState;
 use crate::tui::util::bytes_to_human_readable_units;
@@ -33,11 +33,10 @@ pub struct LayerInspectorPane {
 impl LayerInspectorPane {
     /// Resets collapsed states and the current node index.
     pub fn reset(&mut self) {
-        // TODO: make iter not expand collapsed directories
-        // TODO: somehow show that a directory is collapsed when rendering
         // TODO: make iter support dynamic collapsing (like when user wants to collapse/expand all directories and we don't know their indexes)
         // TODO: track in which layer an entry was last modified
-        // TODO: allow iter do path-based filtering self.current_node_idx = 0;
+        // TODO: allow iter do path-based filtering
+        self.current_node_idx = 0;
         self.collapsed_nodes.clear();
     }
 
@@ -108,6 +107,11 @@ impl LayerInspectorPane {
                 path.display()
             )
             .with_context(|| format!("failed to format a node {}", idx))?;
+
+            if let Some(FileState::Link(link)) = node.file_state() {
+                write!(&mut node_tree_branch, " -> {}", link.display())
+                    .with_context(|| format!("failed to format a link {}", idx))?;
+            }
 
             spans.push(Span::styled(node_tree_branch, get_node_style(node_is_active)));
             lines.push(Line::from(spans));

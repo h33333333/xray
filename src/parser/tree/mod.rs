@@ -150,6 +150,13 @@ impl Tree {
         }
         Some(n_of_children)
     }
+
+    pub fn file_state(&self) -> Option<&FileState> {
+        match self {
+            Tree::File(state) => Some(state),
+            _ => None,
+        }
+    }
 }
 
 impl Default for Tree {

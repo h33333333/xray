@@ -100,7 +100,7 @@ fn render(frame: &mut Frame, state: &AppState) -> anyhow::Result<()> {
 /// Returns an array that contains upper left, middle left, lower left, and right [Rect].
 fn split_layout(initial_area: Rect) -> [Rect; 4] {
     let [left, right] =
-        Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).areas(initial_area);
+        Layout::horizontal([Constraint::Percentage(35), Constraint::Percentage(70)]).areas(initial_area);
     let [upper_left, middle_left, lower_left] =
         Layout::vertical([Constraint::Min(8), Constraint::Min(10), Constraint::Percentage(100)]).areas(left);
 
