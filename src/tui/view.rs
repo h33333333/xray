@@ -1,4 +1,6 @@
 mod active_pane;
+mod command_bar;
+mod help_popup;
 mod macros;
 mod pane;
 
@@ -6,11 +8,17 @@ use std::io;
 
 pub use active_pane::ActivePane;
 use anyhow::Context;
+use command_bar::CommandBar;
+use help_popup::HelpPopup;
 pub use pane::{ImageInfoPane, LayerInfoPane, LayerInspectorPane, LayerSelectorPane, Pane};
-use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::layout::{Constraint, Flex, Layout, Rect};
+use ratatui::widgets::Clear;
 use ratatui::{DefaultTerminal, Frame};
 
 use super::store::{AppState, Store};
+
+type CommandBarArea = Rect;
+type PaneAreas = [Rect; 4];
 
 /// A Flux view that works with a specific [Store].
 pub trait View<S: Store> {
@@ -71,8 +79,11 @@ impl View<AppState> for App {
 ///     2. Middle left pane - layer information pane.
 ///     3. Bottom left pane - layer selection pane.
 ///     4. Right pane - layer diff pane.
+///
+/// This function also renders the command bar below the main panes and
+/// the help popup if it's currently visible.
 fn render(frame: &mut Frame, state: &AppState) -> anyhow::Result<()> {
-    let pane_areas = split_layout(frame.area());
+    let (pane_areas, command_bar) = split_layout(frame.area());
 
     debug_assert_eq!(
         pane_areas.len(),
@@ -92,17 +103,45 @@ fn render(frame: &mut Frame, state: &AppState) -> anyhow::Result<()> {
         );
     }
 
+    frame.render_widget(
+        CommandBar::render(state).context("failed to redner the command bar")?,
+        command_bar,
+    );
+
+    if state.show_help_popup {
+        let popup_area = popup_area(frame.area());
+        clear_area(frame, popup_area);
+        frame.render_widget(
+            HelpPopup::render(state).context("failed to render the help popup")?,
+            popup_area,
+        );
+    }
+
     Ok(())
 }
 
 /// Splits the passed [Rect] into two equal columns, also splitting the first column into three vertical sections.
 ///
 /// Returns an array that contains upper left, middle left, lower left, and right [Rect].
-fn split_layout(initial_area: Rect) -> [Rect; 4] {
-    let [left, right] =
-        Layout::horizontal([Constraint::Percentage(35), Constraint::Percentage(70)]).areas(initial_area);
+fn split_layout(initial_area: Rect) -> (PaneAreas, CommandBarArea) {
+    let [main, command_bar] = Layout::vertical([Constraint::Percentage(100), Constraint::Min(1)]).areas(initial_area);
+    let [left, right] = Layout::horizontal([Constraint::Percentage(35), Constraint::Percentage(70)]).areas(main);
     let [upper_left, middle_left, lower_left] =
         Layout::vertical([Constraint::Min(8), Constraint::Min(10), Constraint::Percentage(100)]).areas(left);
 
-    [upper_left, middle_left, lower_left, right]
+    ([upper_left, middle_left, lower_left, right], command_bar)
+}
+
+/// Returns a [Rect] that can be used to show a centered popup.
+fn popup_area(area: Rect) -> Rect {
+    let vertical = Layout::vertical([Constraint::Percentage(35)]).flex(Flex::Center);
+    let horizontal = Layout::horizontal([Constraint::Percentage(35)]).flex(Flex::Center);
+    let [area] = vertical.areas(area);
+    let [area] = horizontal.areas(area);
+    area
+}
+
+/// Clears the provided area by rendering the [Clear] widget onto it.
+fn clear_area(frame: &mut Frame, area: Rect) {
+    frame.render_widget(Clear, area);
 }

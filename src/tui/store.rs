@@ -29,6 +29,7 @@ pub struct AppState {
     pub clipboard: Option<Clipboard>,
     /// All layers in the currently viewed image.
     pub layers: IndexMap<Sha256Digest, Layer>,
+    pub show_help_popup: bool,
 }
 
 impl AppState {
@@ -70,6 +71,7 @@ impl AppState {
             active_pane: ActivePane::default(),
             clipboard,
             layers: image.layers,
+            show_help_popup: false,
         })
     }
 
@@ -112,8 +114,8 @@ impl Store for AppState {
     fn handle(&mut self, action: Self::Action) -> anyhow::Result<()> {
         match action {
             AppAction::Empty => tracing::trace!("Received an empty event"),
-            AppAction::TogglePane(direction) => self.active_pane.toggle(direction),
-            action @ (AppAction::Interact | AppAction::Move(..)) => {
+            AppAction::TogglePane(direction) if !self.show_help_popup => self.active_pane.toggle(direction),
+            action @ (AppAction::Interact | AppAction::Move(..)) if !self.show_help_popup => {
                 let active_pane_idx = Into::<usize>::into(self.active_pane);
                 // HACK: take the pane here in order to be able to provide a reference to the state when handling the action.
                 let mut active_pane = self.panes[active_pane_idx]
@@ -131,7 +133,7 @@ impl Store for AppState {
                 // Return the pane back
                 self.panes[active_pane_idx].replace(active_pane);
             }
-            AppAction::Copy => {
+            AppAction::Copy if !self.show_help_popup => {
                 if self.clipboard.is_none() {
                     tracing::trace!("Can't copy: no clipboard is available");
                     return Ok(());
@@ -145,6 +147,11 @@ impl Store for AppState {
                 // Return the clipboard where it belongs
                 self.clipboard = clipboard;
             }
+            AppAction::ToggleHelpPane => {
+                self.show_help_popup = !self.show_help_popup;
+            }
+            // Do nothing in cases when the help popup is active and the user tries to do something besides closing the popup.
+            _ => {}
         };
 
         Ok(())

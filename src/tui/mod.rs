@@ -51,6 +51,9 @@ pub fn run(mut dispatcher: AppDispatcher) -> anyhow::Result<()> {
             Event::Key(event) if event.code == KeyCode::Enter || event.code == KeyCode::Char('l') => {
                 dispatcher.dispatch(AppAction::Interact)?;
             }
+            Event::Key(event) if event.code == KeyCode::Char('/') => {
+                dispatcher.dispatch(AppAction::ToggleHelpPane)?;
+            }
             evt => tracing::trace!("Ignoring an event: {:?}", evt),
         }
     }

@@ -18,7 +18,8 @@ use ratatui::style::{Style, Stylize};
 use ratatui::text::Text;
 use ratatui::widgets::block::Title;
 use ratatui::widgets::{Block, BorderType, Paragraph, Widget, Wrap};
-use style::{text_color, ACTIVE_FIELD_STYLE, ACTIVE_INSPECTOR_NODE_STYLE, FIELD_KEY_STYLE, FIELD_VALUE_STYLE};
+use style::{text_color, ACTIVE_FIELD_STYLE, ACTIVE_INSPECTOR_NODE_STYLE};
+pub(super) use style::{FIELD_KEY_STYLE, FIELD_VALUE_STYLE};
 use util::fields_into_lines;
 
 use crate::parser::LayerChangeSet;
@@ -43,7 +44,7 @@ pub enum Pane {
 impl Pane {
     /// Returns a [Widget] that can be used to render the current pane in the terminal.
     pub fn render<'a>(&'a self, state: &'a AppState, pane_rows: u16) -> anyhow::Result<impl Widget + 'a> {
-        let pane_is_active = state.active_pane == self.into();
+        let pane_is_active = state.active_pane == self.into() && !state.show_help_popup;
 
         let text_color = text_color(pane_is_active);
         let field_key_style = FIELD_KEY_STYLE.fg(text_color);

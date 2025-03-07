@@ -13,6 +13,8 @@ pub enum AppAction {
     ///
     /// What is copied is up to the currently active pane.
     Copy,
+    /// Show/hide the help pane.
+    ToggleHelpPane,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
