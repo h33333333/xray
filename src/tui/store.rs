@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 
 use super::action::AppAction;
 use super::util::copy_to_clipboard;
-use super::view::{ActivePane, ImageInfoPane, LayerInfoPane, LayerInspectorPane, LayerSelectorPane, Pane};
+use super::view::{ActivePane, ImageInfoPane, LayerInfoPane, LayerInspectorPane, LayerSelectorPane, Pane, SideEffect};
 use crate::parser::{Image, Layer, LayerChangeSet, Sha256Digest};
 
 /// A Flux store that can handle a [Store::Action].
@@ -48,7 +48,7 @@ impl AppState {
         let layer_selector_pane = Pane::LayerSelector(LayerSelectorPane::new(
             *digest,
             0,
-            layer.changeset.clone().unwrap_or(LayerChangeSet::new_empty_dir()),
+            layer.changeset.clone().unwrap_or(LayerChangeSet::new(*digest)),
         ));
         let layer_info_pane = Pane::LayerInfo(LayerInfoPane::default());
         let layer_inspector_pane = Pane::LayerInspector(LayerInspectorPane::default());
@@ -89,8 +89,8 @@ impl AppState {
             .context("selected layer has an invalid index")
     }
 
-    /// Returns a reference to the [LayerChangeSet] of the currently selected layers.
-    pub fn get_selected_layers_changeset(&self) -> anyhow::Result<(&LayerChangeSet, usize)> {
+    /// Returns a reference to the aggregated [LayerChangeSet] of the currently selected layer and its parents.
+    pub fn get_aggregated_layers_changeset(&self) -> anyhow::Result<(&LayerChangeSet, usize)> {
         let layer_selector_pane_idx: usize = ActivePane::LayerSelector.into();
         let layer_selector_pane = &self.panes[layer_selector_pane_idx];
         if let Some(Pane::LayerSelector(pane)) = layer_selector_pane {
@@ -105,6 +105,24 @@ impl AppState {
             .get(Into::<usize>::into(self.active_pane))
             .and_then(|pane| pane.as_ref())
             .with_context(|| format!("bug: pane {:?} is no longer at its expected place", self.active_pane))
+    }
+
+    fn reset_layer_inspector_pane(&mut self) -> anyhow::Result<()> {
+        let layer_inspector_pane_idx: usize = ActivePane::LayerInspector.into();
+        let layer_inspector_pane = &mut self.panes[layer_inspector_pane_idx];
+        if let Some(Pane::LayerInspector(pane)) = layer_inspector_pane {
+            pane.reset();
+            Ok(())
+        } else {
+            anyhow::bail!("layer inspector pane is no longer at the expected position in the UI");
+        }
+    }
+
+    fn apply_side_effect(&mut self, side_effect: SideEffect) -> anyhow::Result<()> {
+        match side_effect {
+            SideEffect::ResetLayerInspector => self.reset_layer_inspector_pane()?,
+        }
+        Ok(())
     }
 }
 
@@ -125,9 +143,15 @@ impl Store for AppState {
                     AppAction::Interact => active_pane
                         .interact_within_pane(self)
                         .context("error while handling the 'interact' action")?,
-                    AppAction::Move(direction) => active_pane
-                        .move_within_pane(direction, self)
-                        .context("error while handling the 'move' action")?,
+                    AppAction::Move(direction) => {
+                        if let Some(side_effect) = active_pane
+                            .move_within_pane(direction, self)
+                            .context("error while handling the 'move' action")?
+                        {
+                            self.apply_side_effect(side_effect)
+                                .context("error while applying a side effect")?
+                        };
+                    }
                     _ => unreachable!("Checked above"),
                 };
                 // Return the pane back

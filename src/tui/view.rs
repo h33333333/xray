@@ -3,6 +3,7 @@ mod command_bar;
 mod help_popup;
 mod macros;
 mod pane;
+mod side_effect;
 
 use std::io;
 
@@ -14,6 +15,7 @@ pub use pane::{ImageInfoPane, LayerInfoPane, LayerInspectorPane, LayerSelectorPa
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::widgets::Clear;
 use ratatui::{DefaultTerminal, Frame};
+pub use side_effect::SideEffect;
 
 use super::store::{AppState, Store};
 

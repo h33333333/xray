@@ -23,6 +23,7 @@ pub(super) use style::{FIELD_KEY_STYLE, FIELD_VALUE_STYLE};
 use util::fields_into_lines;
 
 use crate::parser::LayerChangeSet;
+use super::SideEffect;
 use crate::tui::action::Direction;
 use crate::tui::store::AppState;
 use crate::tui::util::encode_hex;
@@ -122,7 +123,7 @@ impl Pane {
     }
 
     /// Moves to the next entry in the specified [Direction] inside the [Pane].
-    pub fn move_within_pane(&mut self, direction: Direction, state: &AppState) -> anyhow::Result<()> {
+    pub fn move_within_pane(&mut self, direction: Direction, state: &AppState) -> anyhow::Result<Option<SideEffect>> {
         match self {
             Pane::ImageInfo(ImageInfoPane { active_field, .. }) => active_field.toggle(direction),
             Pane::LayerSelector(LayerSelectorPane {
@@ -150,7 +151,7 @@ impl Pane {
                 let mut aggregated_layers = all_current_layers
                     .get_index(0)
                     .and_then(|(_, layer)| layer.changeset.clone())
-                    .unwrap_or(LayerChangeSet::new_empty_dir());
+                    .context("not a single layer in the all currently selected layers")?;
 
                 for (_, layer) in all_current_layers.get_range(1..).into_iter().flatten() {
                     if let Some(changeset) = layer.changeset.as_ref() {
@@ -162,12 +163,15 @@ impl Pane {
                 *selected_layer_digest = *digest;
                 *selected_layer_idx = next_layer_idx;
                 *selected_layers_changeset = (aggregated_layers, aggregated_layers_changeset_size);
+
+                // We need to reset the layer inspector pane, as its state is now invalid
+                return Ok(Some(SideEffect::ResetLayerInspector));
             }
             Pane::LayerInfo(pane_state) => pane_state.active_field.toggle(direction),
             Pane::LayerInspector(pane_state) => pane_state.move_within_pane(direction, state)?,
         };
 
-        Ok(())
+        Ok(None)
     }
 
     /// Returns the currently selected value within a [Pane].
