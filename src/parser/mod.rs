@@ -15,7 +15,7 @@ use indexmap::IndexMap;
 use json::{ImageHistory, ImageLayerConfigs, JsonBlob};
 use serde::de::DeserializeOwned;
 use tar::Archive;
-use tree::Tree;
+use tree::{Node, Tree};
 use util::{determine_blob_type, get_entry_size_in_blocks, sha256_digest_from_hex};
 
 pub type Sha256Digest = [u8; SHA256_DIGEST_LENGTH];
@@ -134,7 +134,11 @@ impl Parser {
                     }
 
                     let (layer_changeset, layer_size) = self
-                        .parse_tar_blob(&mut reader, entry_size_in_blocks * TAR_BLOCK_SIZE as u64)
+                        .parse_tar_blob(
+                            &mut reader,
+                            entry_size_in_blocks * TAR_BLOCK_SIZE as u64,
+                            layer_sha256_digest,
+                        )
                         .context("error while parsing a tar layer")?;
 
                     self.parsed_layers
@@ -194,12 +198,13 @@ impl Parser {
         &self,
         src: &mut R,
         blob_size: u64,
+        layer_digest: Sha256Digest,
     ) -> anyhow::Result<(LayerChangeSet, LayerSize)> {
         let mut archive = Archive::new(src);
         // We don't want to stop when we encounter an empty Tar header, as we want to parse other blobs as well
         archive.set_ignore_zeros(true);
 
-        let mut change_set = LayerChangeSet::new();
+        let mut change_set = LayerChangeSet::new(layer_digest);
 
         let mut layer_size = 0;
         for entry in archive
@@ -221,7 +226,7 @@ impl Parser {
 
             if let Ok(path) = header.path() {
                 let node = if header.entry_type().is_dir() {
-                    Tree::new_empty_dir()
+                    Node::new_empty_dir()
                 } else {
                     let size = header.size().unwrap_or(0);
                     layer_size += size;
@@ -240,13 +245,16 @@ impl Parser {
                                 continue;
                             }
                         } else {
+                            // We can't do anything with such files
                             continue;
                         };
 
-                    Tree::File(file_state)
+                    Node::File(file_state)
                 };
 
-                change_set.insert(path, node).context("failed to insert an entry")?;
+                change_set
+                    .insert(path, node, layer_digest)
+                    .context("failed to insert an entry")?;
             }
         }
 

@@ -18,11 +18,10 @@ use ratatui::style::{Style, Stylize};
 use ratatui::text::Text;
 use ratatui::widgets::block::Title;
 use ratatui::widgets::{Block, BorderType, Paragraph, Widget, Wrap};
-use style::{text_color, ACTIVE_FIELD_STYLE, ACTIVE_INSPECTOR_NODE_STYLE};
+use style::{text_color, ACTIVE_FIELD_STYLE, ACTIVE_INSPECTOR_NODE_STYLE, MODIFIED_INSPECTOR_NODE_STYLE};
 pub(super) use style::{FIELD_KEY_STYLE, FIELD_VALUE_STYLE};
 use util::fields_into_lines;
 
-use crate::parser::LayerChangeSet;
 use super::SideEffect;
 use crate::tui::action::Direction;
 use crate::tui::store::AppState;
@@ -97,18 +96,23 @@ impl Pane {
                 Ok(Paragraph::new(Text::from(lines)).wrap(Wrap { trim: true }).block(block))
             }
             Pane::LayerInspector(pane_state) => {
-                let (layer_changeset, changeset_size) = state.get_selected_layers_changeset()?;
+                let (layer_changeset, _) = state.get_aggregated_layers_changeset()?;
+                let (current_layer_digest, _) = state.get_selected_layer()?;
 
                 // Two rows are taken by the block borders
                 let remaining_rows = pane_rows - 2;
                 let lines = pane_state
                     .changeset_to_lines(
                         layer_changeset,
-                        changeset_size,
-                        |node_is_active| {
-                            if node_is_active && pane_is_active {
+                        |node_is_active, node_updated_in| {
+                            if !pane_is_active {
+                                return field_value_style;
+                            }
+                            if node_is_active {
                                 // Underlining doesn't look that good in the file tree, so just use a standard BoW outline
                                 ACTIVE_INSPECTOR_NODE_STYLE
+                            } else if node_updated_in == current_layer_digest {
+                                MODIFIED_INSPECTOR_NODE_STYLE
                             } else {
                                 field_value_style
                             }

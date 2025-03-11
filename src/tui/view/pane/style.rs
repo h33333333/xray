@@ -7,6 +7,7 @@ pub const FIELD_VALUE_STYLE: Style = Style::new();
 pub const ACTIVE_FIELD_STYLE: Style = Style::new().add_modifier(Modifier::UNDERLINED);
 pub const FIELD_VALUE_DELIMITER: &str = ": ";
 pub const ACTIVE_INSPECTOR_NODE_STYLE: Style = Style::new().fg(Color::Black).bg(Color::White);
+pub const MODIFIED_INSPECTOR_NODE_STYLE: Style = Style::new().fg(Color::LightGreen);
 
 /// Returns the [Color] of the text based on whether its parent [Pane](super::Pane) is active.
 pub fn text_color(pane_is_active: bool) -> Color {

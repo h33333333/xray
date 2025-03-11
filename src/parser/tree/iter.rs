@@ -3,16 +3,16 @@ use std::path::Path;
 
 use super::Tree;
 
-pub struct NodeIter<'a> {
+pub struct TreeIter<'a> {
     queue: VecDeque<(&'a Tree, &'a Path, usize)>,
     active_levels: Option<HashSet<usize>>,
 }
 
-impl<'a> NodeIter<'a> {
+impl<'a> TreeIter<'a> {
     pub fn new(tree: &'a Tree, track_levels: bool) -> Self {
         let mut queue = VecDeque::new();
         queue.push_back((tree, Path::new("."), 0));
-        NodeIter {
+        TreeIter {
             queue,
             active_levels: track_levels.then(HashSet::new),
         }
@@ -27,7 +27,7 @@ impl<'a> NodeIter<'a> {
     }
 }
 
-impl<'a> Iterator for NodeIter<'a> {
+impl<'a> Iterator for TreeIter<'a> {
     type Item = (&'a Path, &'a Tree, usize, bool);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -47,7 +47,7 @@ impl<'a> Iterator for NodeIter<'a> {
                 active_levels.remove(&depth);
             }
         }
-        if let Some(children) = next_node.children() {
+        if let Some(children) = next_node.node.children() {
             for (path, node) in children.iter().rev() {
                 self.queue.push_front((node, path, depth + 1));
             }
@@ -58,12 +58,12 @@ impl<'a> Iterator for NodeIter<'a> {
 }
 
 pub struct EnumeratedNodeIter<'a> {
-    inner: NodeIter<'a>,
+    inner: TreeIter<'a>,
     count: usize,
 }
 
 impl<'a> EnumeratedNodeIter<'a> {
-    fn new(inner: NodeIter<'a>) -> Self {
+    fn new(inner: TreeIter<'a>) -> Self {
         EnumeratedNodeIter { inner, count: 0 }
     }
 
