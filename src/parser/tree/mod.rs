@@ -122,16 +122,14 @@ impl Node {
     pub fn is_added(&self) -> bool {
         match self {
             Node::File(state) => matches!(state, FileState::Added(_)),
-            Node::Directory((children, _)) => children.values().all(|tree| tree.node.is_added()),
+            Node::Directory((_, state)) => matches!(state, DirectoryState::Added),
         }
     }
 
     pub fn is_modified(&self) -> bool {
         match self {
             Node::File(state) => matches!(state, FileState::Modified(_)),
-            Node::Directory((children, _)) => children
-                .values()
-                .any(|tree| tree.node.is_modified() || tree.node.is_added()),
+            Node::Directory((_, state)) => matches!(state, DirectoryState::Modified),
         }
     }
 
