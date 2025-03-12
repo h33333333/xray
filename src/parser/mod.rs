@@ -5,8 +5,11 @@ mod json;
 mod tree;
 mod util;
 
+use std::borrow::Cow;
 use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::io::{Read, Seek};
+use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 
 use anyhow::Context;
@@ -26,13 +29,23 @@ type LayerSize = u64;
 /// Represents state of a file in a layer.
 #[derive(Debug, Default, Clone)]
 pub enum FileState {
-    /// A file that exists in a layer with its size.
-    Exists(u64),
+    /// A newly added file
+    Added(u64),
+    /// A file that was updated
+    Modified(u64),
     /// File that was deleted in this layer
     #[default]
     Deleted,
     /// A hardlink/symlink that links to the contained [PathBuf].
     Link(PathBuf),
+}
+
+// FIXME: this needs refactoring
+#[derive(Debug, Clone)]
+pub enum DirectoryState {
+    Added,
+    Modified,
+    Deleted,
 }
 
 /// A parsed OCI-compliant container image.
@@ -225,23 +238,32 @@ impl Parser {
             }
 
             if let Ok(path) = header.path() {
-                let node = if header.entry_type().is_dir() {
-                    Node::new_empty_dir()
+                let (path, node) = if header.entry_type().is_dir() {
+                    (path, Node::new_empty_dir())
                 } else {
                     let size = header.size().unwrap_or(0);
                     layer_size += size;
 
-                    let file_state =
+                    let (path, file_state) =
                         if let Some(link) = header.link_name().context("failed to retrieve the link name")? {
-                            FileState::Link(link.into_owned())
+                            (path, FileState::Link(link.into_owned()))
                         } else if let Some(file_name) = path.file_name() {
                             // Check if it's a whiteout
                             if file_name.as_encoded_bytes().starts_with(b".wh.") {
-                                FileState::Deleted
+                                (
+                                    // Strip the whiteout prefix
+                                    Cow::Owned(path.with_file_name(OsStr::from_bytes(
+                                        // SAFETY: unwrap is safe, as we know that the prefix exists
+                                        file_name.as_encoded_bytes().strip_prefix(b".wh.").unwrap(),
+                                    ))),
+                                    FileState::Deleted,
+                                )
                             } else if file_name.as_encoded_bytes() != b".wh..wh..opq" {
-                                FileState::Exists(size)
+                                (path, FileState::Added(size))
                             } else {
                                 // Simply ignoring opaque whiteouts does the trick
+                                // FIXME: no, it doesn't. I need to mark a directory as one that contains an opaque whiteout file
+                                // and then handle such directories correspondingly when merging the trees
                                 continue;
                             }
                         } else {
@@ -249,7 +271,7 @@ impl Parser {
                             continue;
                         };
 
-                    Node::File(file_state)
+                    (path, Node::File(file_state))
                 };
 
                 change_set

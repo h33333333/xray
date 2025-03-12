@@ -18,7 +18,10 @@ use ratatui::style::{Style, Stylize};
 use ratatui::text::Text;
 use ratatui::widgets::block::Title;
 use ratatui::widgets::{Block, BorderType, Paragraph, Widget, Wrap};
-use style::{text_color, ACTIVE_FIELD_STYLE, ACTIVE_INSPECTOR_NODE_STYLE, MODIFIED_INSPECTOR_NODE_STYLE};
+use style::{
+    text_color, ACTIVE_FIELD_STYLE, ACTIVE_INSPECTOR_NODE_STYLE, ADDED_INSPECTOR_NODE_STYLE,
+    DELETED_INSPECTOR_NODE_STYLE, MODIFIED_INSPECTOR_NODE_STYLE,
+};
 pub(super) use style::{FIELD_KEY_STYLE, FIELD_VALUE_STYLE};
 use util::fields_into_lines;
 
@@ -104,7 +107,7 @@ impl Pane {
                 let lines = pane_state
                     .changeset_to_lines(
                         layer_changeset,
-                        |node_is_active, node_updated_in| {
+                        |node_is_active, node_updated_in, node_is_deleted, node_is_modified| {
                             if !pane_is_active {
                                 return field_value_style;
                             }
@@ -112,7 +115,13 @@ impl Pane {
                                 // Underlining doesn't look that good in the file tree, so just use a standard BoW outline
                                 ACTIVE_INSPECTOR_NODE_STYLE
                             } else if node_updated_in == current_layer_digest {
-                                MODIFIED_INSPECTOR_NODE_STYLE
+                                if node_is_deleted {
+                                    DELETED_INSPECTOR_NODE_STYLE
+                                } else if node_is_modified {
+                                    MODIFIED_INSPECTOR_NODE_STYLE
+                                } else {
+                                    ADDED_INSPECTOR_NODE_STYLE
+                                }
                             } else {
                                 field_value_style
                             }

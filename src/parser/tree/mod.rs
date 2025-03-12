@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 use iter::TreeIter;
 
-use super::{FileState, Sha256Digest};
+use super::{DirectoryState, FileState, Sha256Digest};
 
 pub type DirMap = BTreeMap<PathBuf, Tree>;
 
@@ -35,7 +35,7 @@ impl Tree {
 
     pub fn merge(mut self, other: Self) -> Self {
         self.updated_in = other.updated_in;
-        self.node = self.node.merge(other.node);
+        self.node = self.node.merge(other.node, &other.updated_in);
         self
     }
 
@@ -73,12 +73,12 @@ impl std::fmt::Debug for Tree {
 #[derive(Clone)]
 pub enum Node {
     File(FileState),
-    Directory((DirMap, bool)),
+    Directory((DirMap, DirectoryState)),
 }
 
 impl Node {
     pub fn new_empty_dir() -> Self {
-        Node::Directory((DirMap::default(), false))
+        Node::Directory((DirMap::default(), DirectoryState::Added))
     }
 
     pub fn is_dir(&self) -> bool {
@@ -94,7 +94,11 @@ impl Node {
 
     pub fn size(&self) -> u64 {
         match self {
-            Node::File(FileState::Exists(size)) => *size,
+            Node::File(FileState::Added(size) | FileState::Modified(size)) => *size,
+            // FIXME: this is bad, as I will recalculate size of each directory on every re-render
+            Node::Directory((children, _)) if !self.is_deleted() => {
+                children.values().map(|tree| tree.node.size()).sum()
+            }
             _ => 0,
         }
     }
@@ -112,6 +116,29 @@ impl Node {
         match self {
             Node::File(state) => Some(state),
             _ => None,
+        }
+    }
+
+    pub fn is_added(&self) -> bool {
+        match self {
+            Node::File(state) => matches!(state, FileState::Added(_)),
+            Node::Directory((children, _)) => children.values().all(|tree| tree.node.is_added()),
+        }
+    }
+
+    pub fn is_modified(&self) -> bool {
+        match self {
+            Node::File(state) => matches!(state, FileState::Modified(_)),
+            Node::Directory((children, _)) => children
+                .values()
+                .any(|tree| tree.node.is_modified() || tree.node.is_added()),
+        }
+    }
+
+    pub fn is_deleted(&self) -> bool {
+        match self {
+            Node::File(state) => matches!(state, FileState::Deleted),
+            Node::Directory((_, state)) => matches!(state, DirectoryState::Deleted),
         }
     }
 
@@ -163,27 +190,60 @@ impl Node {
         Ok(())
     }
 
-    fn merge(mut self, other: Self) -> Self {
+    fn merge(mut self, other: Self, digest: &Sha256Digest) -> Self {
         match (&mut self, other) {
             (Node::Directory((left_children, left_state)), Node::Directory((right_children, right_state))) => {
                 for (path, right_node) in right_children {
                     let updated_node = if let Some(left_node) = left_children.remove(&path) {
-                        left_node.node.merge(right_node.node)
+                        left_node.node.merge(right_node.node, digest)
                     } else {
                         right_node.node
                     };
                     left_children.insert(path, Tree::new_with_node(right_node.updated_in, updated_node));
                 }
-                *left_state = right_state;
+                let new_state = match (&left_state, &right_state) {
+                    (_, DirectoryState::Added) => DirectoryState::Modified,
+                    (_, _) => right_state,
+                };
+                *left_state = new_state;
             }
-            (Node::File(left_state), Node::File(right_state)) => *left_state = right_state,
+            (Node::File(left_state), Node::File(right_state)) => {
+                let new_state = match (&left_state, &right_state) {
+                    (_, FileState::Added(new_size)) => FileState::Modified(*new_size),
+                    (_, _) => right_state,
+                };
+                *left_state = new_state;
+            }
             (left_node, right_node) => {
-                // Can only happen if type of a node has changed.
-                // If this happens, then we simply want to replace the node altogether.
-                *left_node = right_node
+                // Check if a directory was deleted using a whiteout file
+                if left_node.is_dir() && right_node.is_deleted() {
+                    left_node.mark_as_deleted(digest);
+                } else {
+                    // Can only happen if type of a node has changed.
+                    // If this happens, then we simply want to replace the node altogether.
+                    *left_node = right_node
+                }
             }
         }
         self
+    }
+
+    fn mark_as_deleted(&mut self, digest: &Sha256Digest) {
+        match self {
+            Node::Directory((children, state)) => {
+                // Mark the directory itself as deleted
+                *state = DirectoryState::Deleted;
+                // Mark each children as deleted recursively
+                tracing::debug!(?children, "test");
+                for tree in children.values_mut() {
+                    tree.updated_in = *digest;
+                    tree.node.mark_as_deleted(digest);
+                }
+            }
+            Node::File(state) => {
+                *state = FileState::Deleted;
+            }
+        }
     }
 }
 

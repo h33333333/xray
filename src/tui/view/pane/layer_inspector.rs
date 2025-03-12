@@ -18,7 +18,6 @@ const INACTIVE_LEVEL_PREFIX: &str = "└─";
 const COLLAPSED_NODE_STATUS_INDICATOR: &str = "⊕";
 const EXPANDED_NODE_STATUS_INDICATOR: &str = "─";
 
-// FIXME: reset state of this pane when selecting layers.
 /// [super::Pane::LayerInspector]'s pane state.
 #[derive(Debug, Default)]
 pub struct LayerInspectorPane {
@@ -34,7 +33,6 @@ impl LayerInspectorPane {
     /// Resets collapsed states and the current node index.
     pub fn reset(&mut self) {
         // TODO: make iter support dynamic collapsing (like when user wants to collapse/expand all directories and we don't know their indexes)
-        // TODO: track in which layer an entry was last modified
         // TODO: allow iter do path-based filtering
         self.current_node_idx = 0;
         self.collapsed_nodes.clear();
@@ -43,7 +41,7 @@ impl LayerInspectorPane {
     pub fn changeset_to_lines<'a>(
         &self,
         changeset: &'a LayerChangeSet,
-        get_node_style: impl Fn(bool, &Sha256Digest) -> Style,
+        get_node_style: impl Fn(bool, &Sha256Digest, bool, bool) -> Style,
         visible_rows: u16,
     ) -> anyhow::Result<Vec<Line<'a>>> {
         let mut lines = vec![];
@@ -71,11 +69,6 @@ impl LayerInspectorPane {
             let (node_size, unit) = bytes_to_human_readable_units(node.node.size());
             let node_is_active = idx == current_node_idx;
 
-            let mut spans = vec![Span::styled(
-                format!("   {:>5.1} {:<2}   ", node_size, unit.human_readable()),
-                get_node_style(node_is_active, &node.updated_in),
-            )];
-
             let mut node_tree_branch = String::with_capacity((depth - 1) * BRANCH_INDICATOR_LENGTH);
             // Skip the "." node
             (1..depth).for_each(|depth| {
@@ -98,23 +91,39 @@ impl LayerInspectorPane {
                 EXPANDED_NODE_STATUS_INDICATOR
             };
 
-            write!(
-                &mut node_tree_branch,
-                "{}{} {}",
-                node_name_prefix,
-                status_prefix,
-                path.display()
-            )
-            .with_context(|| format!("failed to format a node {}", idx))?;
+            write!(&mut node_tree_branch, "{}{}", node_name_prefix, status_prefix,)
+                .with_context(|| format!("failed to format a node {}", idx))?;
 
+            let mut spans = vec![
+                Span::styled(
+                    format!("   {:>5.1} {:<2}   ", node_size, unit.human_readable()),
+                    get_node_style(
+                        node_is_active,
+                        &node.updated_in,
+                        node.node.is_deleted(),
+                        node.node.is_modified(),
+                    ),
+                ),
+                Span::styled(
+                    node_tree_branch,
+                    get_node_style(node_is_active, &Sha256Digest::default(), false, false),
+                ),
+            ];
+
+            let mut path = format!(" {}", path.display());
             if let Some(FileState::Link(link)) = node.node.file_state() {
-                write!(&mut node_tree_branch, " -> {}", link.display())
+                write!(&mut path, " -> {}", link.display())
                     .with_context(|| format!("failed to format a link {}", idx))?;
             }
 
             spans.push(Span::styled(
-                node_tree_branch,
-                get_node_style(node_is_active, &node.updated_in),
+                path,
+                get_node_style(
+                    node_is_active,
+                    &node.updated_in,
+                    node.node.is_deleted(),
+                    node.node.is_modified(),
+                ),
             ));
             lines.push(Line::from(spans));
 
