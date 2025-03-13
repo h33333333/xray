@@ -6,7 +6,7 @@ mod tree;
 mod util;
 
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::ffi::OsStr;
 use std::io::{Read, Seek};
 use std::os::unix::ffi::OsStrExt;
@@ -23,29 +23,49 @@ use util::{determine_blob_type, get_entry_size_in_blocks, sha256_digest_from_hex
 
 pub type Sha256Digest = [u8; SHA256_DIGEST_LENGTH];
 pub type LayerChangeSet = Tree;
+pub type DirMap = BTreeMap<PathBuf, Tree>;
 
 type LayerSize = u64;
 
-/// Represents state of a file in a layer.
-#[derive(Debug, Default, Clone)]
-pub enum FileState {
-    /// A newly added file
+/// Represents state of a [Node] in a layer.
+#[derive(Debug, Clone, Copy)]
+pub enum NodeStatus {
+    /// A node added in the current layer
     Added(u64),
-    /// A file that was updated
+    /// A node that was updated in the current layer
     Modified(u64),
-    /// File that was deleted in this layer
-    #[default]
+    /// A node that was deleted in the current layer
     Deleted,
-    /// A hardlink/symlink that links to the contained [PathBuf].
-    Link(PathBuf),
 }
 
-// FIXME: this needs refactoring
+/// Represents state of a file in a layer.
 #[derive(Debug, Clone)]
-pub enum DirectoryState {
-    Added,
-    Modified,
-    Deleted,
+pub struct FileState {
+    status: NodeStatus,
+    /// Is `Some` if file is a hardlink/symlink that links to the contained [PathBuf].
+    actual_file: Option<PathBuf>,
+}
+
+impl FileState {
+    pub fn new(status: NodeStatus, actual_file: Option<PathBuf>) -> Self {
+        FileState { status, actual_file }
+    }
+}
+
+/// Represents state of a directory in a layer.
+#[derive(Debug, Clone)]
+pub struct DirectoryState {
+    status: NodeStatus,
+    children: DirMap,
+}
+
+impl DirectoryState {
+    pub fn new_empty() -> Self {
+        DirectoryState {
+            status: NodeStatus::Added(0),
+            children: DirMap::default(),
+        }
+    }
 }
 
 /// A parsed OCI-compliant container image.
@@ -244,9 +264,9 @@ impl Parser {
                     let size = header.size().unwrap_or(0);
                     layer_size += size;
 
-                    let (path, file_state) =
+                    let (path, status, link) =
                         if let Some(link) = header.link_name().context("failed to retrieve the link name")? {
-                            (path, FileState::Link(link.into_owned()))
+                            (path, NodeStatus::Added(0), Some(link.into_owned()))
                         } else if let Some(file_name) = path.file_name() {
                             // Check if it's a whiteout
                             if file_name.as_encoded_bytes().starts_with(b".wh.") {
@@ -256,10 +276,11 @@ impl Parser {
                                         // SAFETY: unwrap is safe, as we know that the prefix exists
                                         file_name.as_encoded_bytes().strip_prefix(b".wh.").unwrap(),
                                     ))),
-                                    FileState::Deleted,
+                                    NodeStatus::Deleted,
+                                    None,
                                 )
                             } else if file_name.as_encoded_bytes() != b".wh..wh..opq" {
-                                (path, FileState::Added(size))
+                                (path, NodeStatus::Added(size), None)
                             } else {
                                 // Simply ignoring opaque whiteouts does the trick
                                 // FIXME: no, it doesn't. I need to mark a directory as one that contains an opaque whiteout file
@@ -271,7 +292,7 @@ impl Parser {
                             continue;
                         };
 
-                    (path, Node::File(file_state))
+                    (path, Node::File(FileState::new(status, link)))
                 };
 
                 change_set

@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 use iter::TreeIter;
 
-use super::{DirectoryState, FileState, Sha256Digest};
+use super::{DirectoryState, FileState, NodeStatus, Sha256Digest};
 
 pub type DirMap = BTreeMap<PathBuf, Tree>;
 
@@ -73,12 +73,12 @@ impl std::fmt::Debug for Tree {
 #[derive(Clone)]
 pub enum Node {
     File(FileState),
-    Directory((DirMap, DirectoryState)),
+    Directory(DirectoryState),
 }
 
 impl Node {
     pub fn new_empty_dir() -> Self {
-        Node::Directory((DirMap::default(), DirectoryState::Added))
+        Node::Directory(DirectoryState::new_empty())
     }
 
     pub fn is_dir(&self) -> bool {
@@ -87,18 +87,21 @@ impl Node {
 
     pub fn children(&self) -> Option<&DirMap> {
         match self {
-            Node::Directory((children, _)) => Some(children),
+            Node::Directory(state) => Some(&state.children),
             _ => None,
         }
     }
 
-    pub fn size(&self) -> u64 {
+    pub fn status(&self) -> NodeStatus {
         match self {
-            Node::File(FileState::Added(size) | FileState::Modified(size)) => *size,
-            // FIXME: this is bad, as I will recalculate size of each directory on every re-render
-            Node::Directory((children, _)) if !self.is_deleted() => {
-                children.values().map(|tree| tree.node.size()).sum()
-            }
+            Node::File(state) => state.status,
+            Node::Directory(state) => state.status,
+        }
+    }
+
+    pub fn size(&self) -> u64 {
+        match self.status() {
+            NodeStatus::Added(size) | NodeStatus::Modified(size) => size,
             _ => 0,
         }
     }
@@ -119,27 +122,26 @@ impl Node {
         }
     }
 
-    pub fn is_added(&self) -> bool {
+    pub fn get_link(&self) -> Option<&Path> {
         match self {
-            Node::File(state) => matches!(state, FileState::Added(_)),
-            Node::Directory((_, state)) => matches!(state, DirectoryState::Added),
+            Node::File(state) => state.actual_file.as_deref(),
+            _ => None,
         }
+    }
+
+    pub fn is_added(&self) -> bool {
+        matches!(self.status(), NodeStatus::Added(_))
     }
 
     pub fn is_modified(&self) -> bool {
-        match self {
-            Node::File(state) => matches!(state, FileState::Modified(_)),
-            Node::Directory((_, state)) => matches!(state, DirectoryState::Modified),
-        }
+        matches!(self.status(), NodeStatus::Modified(_))
     }
 
     pub fn is_deleted(&self) -> bool {
-        match self {
-            Node::File(state) => matches!(state, FileState::Deleted),
-            Node::Directory((_, state)) => matches!(state, DirectoryState::Deleted),
-        }
+        matches!(self.status(), NodeStatus::Deleted)
     }
 
+    // FIXME: update all parent directories when inserting a new node inside
     fn insert(&mut self, path: impl AsRef<Path>, new_node: Self, layer_digest: Sha256Digest) -> anyhow::Result<()> {
         let mut path_components = path.as_ref().iter();
 
@@ -151,11 +153,14 @@ impl Node {
 
         let mut node = self;
         for component in path_components {
-            node = if let Node::Directory((map, _)) = node {
-                if !map.contains_key(Path::new(component)) {
-                    map.insert(Path::new(component).into(), Tree::new(layer_digest));
+            node = if let Node::Directory(state) = node {
+                if !state.children.contains_key(Path::new(component)) {
+                    state
+                        .children
+                        .insert(Path::new(component).into(), Tree::new(layer_digest));
                 }
-                let next_node = &mut map
+                let next_node = &mut state
+                    .children
                     .get_mut(Path::new(component))
                     .context("bug: this should be unreachable")?
                     .node;
@@ -168,49 +173,59 @@ impl Node {
                 // HACK: this can happen when dealing with hard links.
                 // We can just override a standard file entry with a directory and proceed as usual.
                 *node = Node::new_empty_dir();
-                let Node::Directory((map, _)) = node else {
+                let Node::Directory(state) = node else {
                     anyhow::bail!("Should be unreachable");
                 };
-                map.insert(Path::new(component).into(), Tree::new(layer_digest));
+                state
+                    .children
+                    .insert(Path::new(component).into(), Tree::new(layer_digest));
 
-                &mut map
+                &mut state
+                    .children
                     .get_mut(Path::new(component))
                     .context("bug: this should be unreachable")?
                     .node
             }
         }
 
-        let Node::Directory((map, _)) = node else {
+        let Node::Directory(state) = node else {
             anyhow::bail!("final component before the file is not a directoy: {:?}", path.as_ref())
         };
-        map.insert(node_name.into(), Tree::new_with_node(layer_digest, new_node));
+        state
+            .children
+            .insert(node_name.into(), Tree::new_with_node(layer_digest, new_node));
 
         Ok(())
     }
 
     fn merge(mut self, other: Self, digest: &Sha256Digest) -> Self {
         match (&mut self, other) {
-            (Node::Directory((left_children, left_state)), Node::Directory((right_children, right_state))) => {
-                for (path, right_node) in right_children {
-                    let updated_node = if let Some(left_node) = left_children.remove(&path) {
+            (Node::Directory(left_state), Node::Directory(right_state)) => {
+                for (path, right_node) in right_state.children {
+                    let updated_node = if let Some(left_node) = left_state.children.remove(&path) {
                         left_node.node.merge(right_node.node, digest)
                     } else {
                         right_node.node
                     };
-                    left_children.insert(path, Tree::new_with_node(right_node.updated_in, updated_node));
+                    left_state
+                        .children
+                        .insert(path, Tree::new_with_node(right_node.updated_in, updated_node));
                 }
-                let new_state = match (&left_state, &right_state) {
-                    (_, DirectoryState::Added) => DirectoryState::Modified,
-                    (_, _) => right_state,
+                let new_state = match (&left_state.status, &right_state.status) {
+                    (_, NodeStatus::Added(_)) => {
+                        // Calculate the updated directory size after merging
+                        NodeStatus::Modified(left_state.children.values().map(|tree| tree.node.size()).sum())
+                    }
+                    (_, _) => right_state.status,
                 };
-                *left_state = new_state;
+                left_state.status = new_state;
             }
             (Node::File(left_state), Node::File(right_state)) => {
-                let new_state = match (&left_state, &right_state) {
-                    (_, FileState::Added(new_size)) => FileState::Modified(*new_size),
-                    (_, _) => right_state,
+                let new_state = match (&left_state.status, &right_state.status) {
+                    (_, NodeStatus::Added(new_size)) => NodeStatus::Modified(*new_size),
+                    (_, _) => right_state.status,
                 };
-                *left_state = new_state;
+                left_state.status = new_state;
             }
             (left_node, right_node) => {
                 // Check if a directory was deleted using a whiteout file
@@ -228,18 +243,17 @@ impl Node {
 
     fn mark_as_deleted(&mut self, digest: &Sha256Digest) {
         match self {
-            Node::Directory((children, state)) => {
+            Node::Directory(state) => {
                 // Mark the directory itself as deleted
-                *state = DirectoryState::Deleted;
+                state.status = NodeStatus::Deleted;
                 // Mark each children as deleted recursively
-                tracing::debug!(?children, "test");
-                for tree in children.values_mut() {
+                for tree in state.children.values_mut() {
                     tree.updated_in = *digest;
                     tree.node.mark_as_deleted(digest);
                 }
             }
             Node::File(state) => {
-                *state = FileState::Deleted;
+                state.status = NodeStatus::Deleted;
             }
         }
     }

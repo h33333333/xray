@@ -5,7 +5,7 @@ use anyhow::Context;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 
-use crate::parser::{FileState, LayerChangeSet, Sha256Digest};
+use crate::parser::{LayerChangeSet, Sha256Digest};
 use crate::tui::action::Direction;
 use crate::tui::store::AppState;
 use crate::tui::util::bytes_to_human_readable_units;
@@ -111,7 +111,7 @@ impl LayerInspectorPane {
             ];
 
             let mut path = format!(" {}", path.display());
-            if let Some(FileState::Link(link)) = node.node.file_state() {
+            if let Some(link) = node.node.get_link() {
                 write!(&mut path, " -> {}", link.display())
                     .with_context(|| format!("failed to format a link {}", idx))?;
             }
