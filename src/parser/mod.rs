@@ -66,6 +66,13 @@ impl DirectoryState {
             children: DirMap::default(),
         }
     }
+
+    pub fn new_with_size(size: u64) -> Self {
+        DirectoryState {
+            status: NodeStatus::Added(size),
+            children: DirMap::default(),
+        }
+    }
 }
 
 /// A parsed OCI-compliant container image.
@@ -258,6 +265,7 @@ impl Parser {
             }
 
             if let Ok(path) = header.path() {
+                // println!("{:?} {:?}", path, header.entry_type());
                 let (path, node) = if header.entry_type().is_dir() {
                     (path, Node::new_empty_dir())
                 } else {

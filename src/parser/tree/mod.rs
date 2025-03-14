@@ -77,6 +77,10 @@ pub enum Node {
 }
 
 impl Node {
+    pub fn new_dir_with_size(size: u64) -> Self {
+        Node::Directory(DirectoryState::new_with_size(size))
+    }
+
     pub fn new_empty_dir() -> Self {
         Node::Directory(DirectoryState::new_empty())
     }
@@ -122,6 +126,13 @@ impl Node {
         }
     }
 
+    pub fn dir_state_mut(&mut self) -> Option<&mut DirectoryState> {
+        match self {
+            Node::Directory(state) => Some(state),
+            _ => None,
+        }
+    }
+
     pub fn get_link(&self) -> Option<&Path> {
         match self {
             Node::File(state) => state.actual_file.as_deref(),
@@ -141,7 +152,7 @@ impl Node {
         matches!(self.status(), NodeStatus::Deleted)
     }
 
-    // FIXME: update all parent directories when inserting a new node inside
+    // TODO: rewrite this function to use recursion
     fn insert(&mut self, path: impl AsRef<Path>, new_node: Self, layer_digest: Sha256Digest) -> anyhow::Result<()> {
         let mut path_components = path.as_ref().iter();
 
@@ -151,46 +162,65 @@ impl Node {
             return Ok(());
         };
 
-        let mut node = self;
-        for component in path_components {
-            node = if let Node::Directory(state) = node {
-                if !state.children.contains_key(Path::new(component)) {
-                    state
+        let directory =
+            path_components.try_fold::<_, _, Result<&mut Node, anyhow::Error>>(self, |node, component| {
+                let next_node = if let Node::Directory(state) = node {
+                    if !state.children.contains_key(Path::new(component)) {
+                        state.children.insert(
+                            Path::new(component).into(),
+                            Tree::new_with_node(
+                                layer_digest,
+                                Node::Directory(DirectoryState::new_with_size(new_node.size())),
+                            ),
+                        );
+                    }
+                    &mut state
                         .children
-                        .insert(Path::new(component).into(), Tree::new(layer_digest));
-                }
-                let next_node = &mut state
-                    .children
-                    .get_mut(Path::new(component))
-                    .context("bug: this should be unreachable")?
-                    .node;
-                if !matches!(next_node, Node::Directory(_)) {
-                    // Protect against cases where the final component is a hard link
-                    *next_node = Node::new_empty_dir();
-                }
-                next_node
-            } else {
-                // HACK: this can happen when dealing with hard links.
-                // We can just override a standard file entry with a directory and proceed as usual.
-                *node = Node::new_empty_dir();
-                let Node::Directory(state) = node else {
-                    anyhow::bail!("Should be unreachable");
-                };
-                state
-                    .children
-                    .insert(Path::new(component).into(), Tree::new(layer_digest));
+                        .get_mut(Path::new(component))
+                        .context("impossible: we just inserted the node above")?
+                        .node
+                } else {
+                    // NOTE: This happened in some images when I was testing the app.
+                    // Some images change type of a node from directory to link back and forth before actually
+                    // creating any children inside the directory. Thus, we may need to replace a node before
+                    // appending other nodes to it.
+                    let mut dir_state = DirectoryState::new_with_size(new_node.size());
+                    dir_state.children.insert(
+                        Path::new(component).into(),
+                        Tree::new_with_node(
+                            layer_digest,
+                            Node::Directory(DirectoryState::new_with_size(new_node.size())),
+                        ),
+                    );
+                    *node = Node::Directory(dir_state);
 
-                &mut state
-                    .children
-                    .get_mut(Path::new(component))
-                    .context("bug: this should be unreachable")?
-                    .node
-            }
+                    &mut node
+                        .dir_state_mut()
+                        .context("impossible: we created a directory above")?
+                        .children
+                        .get_mut(Path::new(component))
+                        .context("impossible: we just inserted the node above")?
+                        .node
+                };
+                Ok(next_node)
+            })?;
+
+        let state = if let Node::Directory(state) = directory {
+            state
+        } else {
+            // Ensure that the last node before the new node is a directory
+            *directory = Node::new_empty_dir();
+            directory
+                .dir_state_mut()
+                .context("impossible: we created a directory above")?
+        };
+
+        // Update the directory size
+        match &mut state.status {
+            NodeStatus::Added(size) | NodeStatus::Modified(size) => *size += new_node.size(),
+            _ => (),
         }
 
-        let Node::Directory(state) = node else {
-            anyhow::bail!("final component before the file is not a directoy: {:?}", path.as_ref())
-        };
         state
             .children
             .insert(node_name.into(), Tree::new_with_node(layer_digest, new_node));
