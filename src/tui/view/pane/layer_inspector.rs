@@ -35,6 +35,7 @@ impl LayerInspectorPane {
         // TODO: make iter support dynamic collapsing (like when user wants to collapse/expand all directories and we don't know their indexes)
         // TODO: allow iter do path-based filtering
         self.current_node_idx = 0;
+        self.collapsed_nodes_before_current = 0;
         self.collapsed_nodes.clear();
     }
 
