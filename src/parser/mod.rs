@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::ffi::OsStr;
 use std::io::{Read, Seek};
 use std::os::unix::ffi::OsStrExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use constants::{BLOB_PATH_PREFIX, SHA256_DIGEST_LENGTH, TAR_BLOCK_SIZE, TAR_MAGIC_NUMBER, TAR_MAGIC_NUMBER_START_IDX};
@@ -265,7 +265,11 @@ impl Parser {
             }
 
             if let Ok(path) = header.path() {
-                // println!("{:?} {:?}", path, header.entry_type());
+                if path == Path::new("./") {
+                    // Some images include the top-level element, which we don't need
+                    continue;
+                }
+
                 let (path, node) = if header.entry_type().is_dir() {
                     (path, Node::new_empty_dir())
                 } else {
