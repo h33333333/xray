@@ -39,12 +39,16 @@ impl Tree {
         self
     }
 
-    pub fn iter(&self) -> TreeIter<'_> {
-        TreeIter::new(self, false)
+    pub fn iter(&self) -> TreeIter<'_, '_> {
+        TreeIter::new(self, false, None)
     }
 
-    pub fn iter_with_levels(&self) -> TreeIter<'_> {
-        TreeIter::new(self, true)
+    pub fn iter_with_levels(&self) -> TreeIter<'_, '_> {
+        TreeIter::new(self, true, None)
+    }
+
+    pub fn iter_with_levels_and_filter<'filter>(&self, filter: &'filter Path) -> TreeIter<'_, 'filter> {
+        TreeIter::new(self, true, Some(filter))
     }
 }
 

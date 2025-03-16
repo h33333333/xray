@@ -3,15 +3,20 @@ use std::path::Path;
 
 use super::Tree;
 
-pub struct TreeIter<'a> {
-    queue: VecDeque<(&'a Tree, &'a Path, usize)>,
+pub struct TreeIter<'a, 'filter> {
+    queue: VecDeque<(&'a Tree, &'a Path, usize, Option<&'filter Path>)>,
     active_levels: Option<HashSet<usize>>,
 }
 
-impl<'a> TreeIter<'a> {
-    pub fn new(tree: &'a Tree, track_levels: bool) -> Self {
+impl<'a, 'f> TreeIter<'a, 'f> {
+    pub fn new(tree: &'a Tree, track_levels: bool, filter: Option<&'f Path>) -> Self {
         let mut queue = VecDeque::new();
-        queue.push_back((tree, Path::new("."), 0));
+        queue.push_back((
+            tree,
+            Path::new("."),
+            0,
+            filter.and_then(|filter| filter.strip_prefix("/").ok()),
+        ));
         TreeIter {
             queue,
             active_levels: track_levels.then(HashSet::new),
@@ -22,21 +27,21 @@ impl<'a> TreeIter<'a> {
         self.active_levels.as_ref().map(|levels| levels.contains(&level))
     }
 
-    pub fn enumerate(self) -> EnumeratedNodeIter<'a> {
+    pub fn enumerate(self) -> EnumeratedNodeIter<'a, 'f> {
         EnumeratedNodeIter::new(self)
     }
 }
 
-impl<'a> Iterator for TreeIter<'a> {
+impl<'a> Iterator for TreeIter<'a, '_> {
     type Item = (&'a Path, &'a Tree, usize, bool);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let (next_node, path, depth) = self.queue.pop_front()?;
+        let (next_node, path, depth, filter) = self.queue.pop_front()?;
 
         let is_level_active = self
             .queue
             .front()
-            .is_some_and(|(_, _, next_depth)| next_depth == &depth);
+            .is_some_and(|(_, _, next_depth, _)| next_depth == &depth);
 
         if let Some(active_levels) = self.active_levels.as_mut() {
             if is_level_active {
@@ -47,9 +52,34 @@ impl<'a> Iterator for TreeIter<'a> {
                 active_levels.remove(&depth);
             }
         }
+
+        let is_filtered_out = if let Some(remaining_path) = filter {
+            // A node is includedd if either its path satisfies the leftmost part of the filter or it's the root node,
+            // in which case we want to strip the lead `/` and continue filtering the actual nodes
+            !remaining_path.starts_with(path) && path != Path::new(".")
+        } else {
+            false
+        };
+
+        // Do not do anything else with this node if it doesn't satisfy the filter
+        if is_filtered_out {
+            return self.next();
+        }
+
         if let Some(children) = next_node.node.children() {
-            for (path, node) in children.iter().rev() {
-                self.queue.push_front((node, path, depth + 1));
+            for (child_path, node) in children.iter().rev() {
+                let filter_for_child = filter
+                    .and_then(|current_filter| {
+                        if path != Path::new(".") {
+                            current_filter.strip_prefix(path).ok()
+                        } else {
+                            // Pass the filter as is
+                            Some(current_filter)
+                        }
+                    })
+                    .filter(|new_filter| !new_filter.as_os_str().is_empty());
+
+                self.queue.push_front((node, child_path, depth + 1, filter_for_child));
             }
         }
 
@@ -57,13 +87,13 @@ impl<'a> Iterator for TreeIter<'a> {
     }
 }
 
-pub struct EnumeratedNodeIter<'a> {
-    inner: TreeIter<'a>,
+pub struct EnumeratedNodeIter<'a, 'f> {
+    inner: TreeIter<'a, 'f>,
     count: usize,
 }
 
-impl<'a> EnumeratedNodeIter<'a> {
-    fn new(inner: TreeIter<'a>) -> Self {
+impl<'a, 'f> EnumeratedNodeIter<'a, 'f> {
+    fn new(inner: TreeIter<'a, 'f>) -> Self {
         EnumeratedNodeIter { inner, count: 0 }
     }
 
@@ -72,7 +102,7 @@ impl<'a> EnumeratedNodeIter<'a> {
     }
 }
 
-impl<'a> Iterator for EnumeratedNodeIter<'a> {
+impl<'a> Iterator for EnumeratedNodeIter<'a, '_> {
     type Item = (usize, (&'a Path, &'a Tree, usize, bool));
 
     fn next(&mut self) -> Option<Self::Item> {
