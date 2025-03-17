@@ -1,6 +1,6 @@
 use action::Direction;
 use anyhow::Context;
-use crossterm::event::{self, Event, KeyCode};
+use crossterm::event::{self, Event, KeyCode, KeyEvent};
 use dispatcher::Dispatcher;
 use store::AppState;
 use view::App;
@@ -32,28 +32,48 @@ pub fn run(mut dispatcher: AppDispatcher) -> anyhow::Result<()> {
         match event {
             // Re-render the interface when terminal window is resized
             Event::Resize(_, _) => dispatcher.dispatch(AppAction::Empty)?,
+            // Quit
             Event::Key(event) if event.code == KeyCode::Char('q') => break Ok(()),
+            // Select next pane
             Event::Key(event) if event.code == KeyCode::Tab => {
                 dispatcher.dispatch(AppAction::TogglePane(Direction::Forward))?;
             }
+            // Select previous pane
             Event::Key(event) if event.code == KeyCode::BackTab => {
                 dispatcher.dispatch(AppAction::TogglePane(Direction::Backward))?;
             }
+            // Move down
             Event::Key(event) if event.code == KeyCode::Char('j') || event.code == KeyCode::Down => {
                 dispatcher.dispatch(AppAction::Move(Direction::Forward))?;
             }
+            // Move up
             Event::Key(event) if event.code == KeyCode::Char('k') || event.code == KeyCode::Up => {
                 dispatcher.dispatch(AppAction::Move(Direction::Backward))?;
             }
+            // Copy the selected item to clipboard
             Event::Key(event) if event.code == KeyCode::Char('y') => {
                 dispatcher.dispatch(AppAction::Copy)?;
             }
+            // Interact within current pane
             Event::Key(event) if event.code == KeyCode::Enter || event.code == KeyCode::Char('l') => {
                 dispatcher.dispatch(AppAction::Interact)?;
             }
+            // Toggle help
             Event::Key(event) if event.code == KeyCode::Char('/') => {
                 dispatcher.dispatch(AppAction::ToggleHelpPane)?;
             }
+            // Select a pane by its index
+            Event::Key(KeyEvent {
+                code: KeyCode::Char(code @ ('0' | '1' | '2' | '3')),
+                ..
+            }) => {
+                let index = code
+                    .to_digit(10)
+                    .context("conversion to digit shouldn't fail, as we are sure about the contents")?
+                    as usize;
+                dispatcher.dispatch(AppAction::SelectPane(index))?;
+            }
+            // Ignore everything else
             evt => tracing::trace!("Ignoring an event: {:?}", evt),
         }
     }

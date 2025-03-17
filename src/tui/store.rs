@@ -88,7 +88,6 @@ impl AppState {
             .get_index(selected_layer_idx)
             .context("selected layer has an invalid index")
     }
-
     /// Returns a reference to the aggregated [LayerChangeSet] of the currently selected layer and its parents.
     pub fn get_aggregated_layers_changeset(&self) -> anyhow::Result<(&LayerChangeSet, usize)> {
         let layer_selector_pane_idx: usize = ActivePane::LayerSelector.into();
@@ -174,6 +173,10 @@ impl Store for AppState {
             AppAction::ToggleHelpPane => {
                 self.show_help_popup = !self.show_help_popup;
             }
+            AppAction::SelectPane(index) if !self.show_help_popup => self
+                .active_pane
+                .select(index)
+                .context("failed to select a pane by index")?,
             // Do nothing in cases when the help popup is active and the user tries to do something besides closing the popup.
             _ => {}
         };

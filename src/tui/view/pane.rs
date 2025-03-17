@@ -15,7 +15,7 @@ pub use layer_info::LayerInfoPane;
 pub use layer_inspector::LayerInspectorPane;
 pub use layer_selector::LayerSelectorPane;
 use ratatui::style::{Style, Stylize};
-use ratatui::text::Text;
+use ratatui::text::{Line, Text};
 use ratatui::widgets::block::Title;
 use ratatui::widgets::{Block, BorderType, Paragraph, Widget, Wrap};
 use style::{
@@ -25,7 +25,7 @@ use style::{
 pub(super) use style::{FIELD_KEY_STYLE, FIELD_VALUE_STYLE};
 use util::fields_into_lines;
 
-use super::SideEffect;
+use super::{ActivePane, SideEffect};
 use crate::tui::action::Direction;
 use crate::tui::store::AppState;
 use crate::tui::util::encode_hex;
@@ -248,7 +248,7 @@ impl Pane {
             .border_type(border_type)
             .border_style(border_style)
             .title(self.get_styled_title(is_active))
-            .title_alignment(ratatui::layout::Alignment::Center)
+            .title(Line::from(Into::<ActivePane>::into(self).to_formatted_index()))
     }
 
     /// Returns a styled [Title] for the pane.
@@ -260,10 +260,12 @@ impl Pane {
             Pane::LayerInspector(..) => "Layer Changes",
         };
 
-        if is_active {
+        let title = if is_active {
             title.bold().white()
         } else {
             title.not_bold().gray()
-        }
+        };
+
+        title.into_centered_line()
     }
 }

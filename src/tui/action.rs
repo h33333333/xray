@@ -15,6 +15,8 @@ pub enum AppAction {
     Copy,
     /// Show/hide the help pane.
     ToggleHelpPane,
+    /// Select a specific pane by its index in the layout.
+    SelectPane(usize),
 }
 
 #[derive(Debug, Default, Clone, Copy)]

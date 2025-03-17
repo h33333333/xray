@@ -54,6 +54,27 @@ macro_rules! render_order_enum {
                     tracing::debug!("Failed to toggle the currently active element for {}. Unknown index: {}", stringify!($name), next_variant_idx);
                 }
             }
+
+            pub fn select(&mut self, index: usize) -> anyhow::Result<()> {
+                let new_active_pane = anyhow::Context::<Self, anyhow::Error>::with_context(
+                    TryFrom::<usize>::try_from(index),
+                    || format!("failed to convert the provided index into an instance of {}", stringify!($name))
+                )?;
+                *self = new_active_pane;
+
+                Ok(())
+            }
+
+            pub fn to_formatted_index(self) -> &'static str {
+                // FIXME: It would be great to find a way of incrementing the index by 1 to make it 1-based and more user-friendly
+                match self {
+                    $(
+                        Self::$variant => {
+                            stringify!([${index()}])
+                        },
+                    )*
+                }
+            }
         }
     };
 }
