@@ -1,0 +1,26 @@
+[package]
+name = "xray"
+version = "0.1.0"
+edition = "2021"
+license-file = "COPYING"
+
+[dependencies]
+anyhow = "1.0.95"
+arboard = "3.4.1"
+clap = { version = "4.5.26", features = ["derive"] }
+crossterm = "0.28.1"
+dirs = "6.0.0"
+indexmap = "2.7.1"
+ratatui = "0.29.0"
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0.137"
+tar = { git = "https://github.com/h33333333/tar-rs" }
+tokio = { version = "1.43.0", features = [
+    "rt-multi-thread",
+    "io-util",
+    "fs",
+    "macros",
+] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+formatted-index-macro = { workspace = true }

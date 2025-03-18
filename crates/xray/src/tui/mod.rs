@@ -64,14 +64,15 @@ pub fn run(mut dispatcher: AppDispatcher) -> anyhow::Result<()> {
             }
             // Select a pane by its index
             Event::Key(KeyEvent {
-                code: KeyCode::Char(code @ ('0' | '1' | '2' | '3')),
+                code: KeyCode::Char(code @ ('1' | '2' | '3' | '4')),
                 ..
             }) => {
                 let index = code
                     .to_digit(10)
                     .context("conversion to digit shouldn't fail, as we are sure about the contents")?
                     as usize;
-                dispatcher.dispatch(AppAction::SelectPane(index))?;
+                // Convert to a 0-based index
+                dispatcher.dispatch(AppAction::SelectPane(index - 1))?;
             }
             // Ignore everything else
             evt => tracing::trace!("Ignoring an event: {:?}", evt),

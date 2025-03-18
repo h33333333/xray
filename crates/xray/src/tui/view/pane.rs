@@ -172,6 +172,8 @@ impl Pane {
                     }
                 }
 
+                // TODO: check if user has provided a filter when calculating the changeset size and adjust the logic here accordingly
+                // TODO: whenever filter changes, I will have to recalculate the number of nodes, as the layer inspector pane depends on that information
                 let aggregated_layers_changeset_size = aggregated_layers.iter().count();
                 *selected_layer_digest = *digest;
                 *selected_layer_idx = next_layer_idx;

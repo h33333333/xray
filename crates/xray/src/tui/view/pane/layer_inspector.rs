@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
+use std::path::Path;
 
 use anyhow::Context;
 use ratatui::style::Style;
@@ -33,7 +34,6 @@ impl LayerInspectorPane {
     /// Resets collapsed states and the current node index.
     pub fn reset(&mut self) {
         // TODO: make iter support dynamic collapsing (like when user wants to collapse/expand all directories and we don't know their indexes)
-        // TODO: allow iter do path-based filtering
         self.current_node_idx = 0;
         self.collapsed_nodes_before_current = 0;
         self.collapsed_nodes.clear();
@@ -52,7 +52,8 @@ impl LayerInspectorPane {
         let visible_rows: usize = visible_rows.into();
         let nodes_to_skip = self.nodes_to_skip_before_current_node(visible_rows);
 
-        let mut iter = changeset.iter_with_levels().enumerate(); // HACK: mimic the `Skip` combinator
+        let mut iter = changeset.iter_with_levels_and_filter(Path::new("/bin")).enumerate();
+        // HACK: mimic the `Skip` combinator
         iter.nth(nodes_to_skip);
         'outer: while let Some((idx, (path, node, depth, level_is_active))) = iter.next() {
             // Check if any parent of this node is collapsed

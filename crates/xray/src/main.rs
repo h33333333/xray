@@ -21,5 +21,11 @@ async fn main() -> anyhow::Result<()> {
         anyhow::bail!("Got an image with zero layers, nothing to inspect here")
     }
 
+    // for (_, layer) in image.layers.iter() {
+    //     if let Some(changeset) = layer.changeset.as_ref() {
+    //         println!("{:?}", changeset);
+    //     }
+    // }
+
     run(init_app_dispatcher(image).context("failed to initialize the app")?)
 }

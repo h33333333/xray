@@ -4,7 +4,7 @@ macro_rules! render_order_enum {
         /// Represents the currently active element and the order in which this set of elements is rendered.
         ///
         /// The order in which variants are defined represents the order in which the corresponding elements will be rendered.
-        #[derive(Debug, Default, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
+        #[derive(::formatted_index_macro::FormattedIndex, Debug, Default, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
         pub enum $name {
             #[default]
             $(
@@ -63,17 +63,6 @@ macro_rules! render_order_enum {
                 *self = new_active_pane;
 
                 Ok(())
-            }
-
-            pub fn to_formatted_index(self) -> &'static str {
-                // FIXME: It would be great to find a way of incrementing the index by 1 to make it 1-based and more user-friendly
-                match self {
-                    $(
-                        Self::$variant => {
-                            stringify!([${index()}])
-                        },
-                    )*
-                }
             }
         }
     };
