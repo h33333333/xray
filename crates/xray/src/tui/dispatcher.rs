@@ -30,4 +30,9 @@ where
             .on_update(&self.store)
             .context("failed to update the view with the latest data from the store")
     }
+
+    /// Returns a reference to the [store](S).
+    pub fn store(&self) -> &S {
+        &self.store
+    }
 }

@@ -22,12 +22,16 @@ const EXPANDED_NODE_STATUS_INDICATOR: &str = "─";
 /// [super::Pane::LayerInspector]'s pane state.
 #[derive(Debug, Default)]
 pub struct LayerInspectorPane {
-    /// Index of the currently selected node in the tree.
+    /// Index of the currently selected node in the tree
     pub current_node_idx: usize,
     /// Number of collapsed nodes before the current one
     pub collapsed_nodes_before_current: usize,
-    /// Maps indexes of all nodes that are collapsed to the number of their children.
+    /// Maps indexes of all nodes that are collapsed to the number of their children
     pub collapsed_nodes: BTreeMap<usize, usize>,
+    /// Path-based filter supplied by the user
+    pub path_filter: String,
+    /// Whether we are showing the path filter input at the bottom of the pane
+    pub is_showing_path_filter_input: bool,
 }
 
 impl LayerInspectorPane {
@@ -52,7 +56,9 @@ impl LayerInspectorPane {
         let visible_rows: usize = visible_rows.into();
         let nodes_to_skip = self.nodes_to_skip_before_current_node(visible_rows);
 
-        let mut iter = changeset.iter_with_levels_and_filter(Path::new("/bin")).enumerate();
+        let mut iter = changeset
+            .iter_with_levels_and_filter(Path::new(&self.path_filter))
+            .enumerate();
         // HACK: mimic the `Skip` combinator
         iter.nth(nodes_to_skip);
         'outer: while let Some((idx, (path, node, depth, level_is_active))) = iter.next() {
@@ -220,6 +226,19 @@ impl LayerInspectorPane {
         }
 
         Ok(())
+    }
+
+    pub fn toggle_path_filter_input(&mut self) -> bool {
+        self.is_showing_path_filter_input = !self.is_showing_path_filter_input;
+        self.is_showing_path_filter_input
+    }
+
+    pub fn append_to_path_filter(&mut self, input: char) {
+        self.path_filter.push(input);
+    }
+
+    pub fn pop_char_from_path_filter(&mut self) {
+        self.path_filter.pop();
     }
 
     fn is_node_collapsed(&self, idx: usize) -> bool {

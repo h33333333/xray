@@ -17,6 +17,14 @@ pub enum AppAction {
     ToggleHelpPane,
     /// Select a specific pane by its index in the layout.
     SelectPane(usize),
+    /// Toggle the input mode in the UI between "normal" and "insert" if the current pane supports it.
+    ToggleInputMode,
+    /// User inputted a character while in the "insert" mode.
+    InputCharacter(char),
+    /// User wants to delete a character while in the "insert" mode.
+    InputDeleteCharacter,
+    /// User pasted a string while in the "insert" mode.
+    InputPaste(String),
 }
 
 #[derive(Debug, Default, Clone, Copy)]

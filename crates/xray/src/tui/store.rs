@@ -29,7 +29,10 @@ pub struct AppState {
     pub clipboard: Option<Clipboard>,
     /// All layers in the currently viewed image.
     pub layers: IndexMap<Sha256Digest, Layer>,
+    /// Whether the help popup is currently shown in the UI.
     pub show_help_popup: bool,
+    /// Whether the UI is currently in the "insert" mode (i.e. allows free text input).
+    pub is_in_insert_mode: bool,
 }
 
 impl AppState {
@@ -72,6 +75,7 @@ impl AppState {
             clipboard,
             layers: image.layers,
             show_help_popup: false,
+            is_in_insert_mode: false,
         })
     }
 
@@ -103,6 +107,13 @@ impl AppState {
         self.panes
             .get(Into::<usize>::into(self.active_pane))
             .and_then(|pane| pane.as_ref())
+            .with_context(|| format!("bug: pane {:?} is no longer at its expected place", self.active_pane))
+    }
+
+    fn get_active_pane_mut(&mut self) -> anyhow::Result<&mut Pane> {
+        self.panes
+            .get_mut(Into::<usize>::into(self.active_pane))
+            .and_then(|pane| pane.as_mut())
             .with_context(|| format!("bug: pane {:?} is no longer at its expected place", self.active_pane))
     }
 
@@ -177,6 +188,15 @@ impl Store for AppState {
                 .active_pane
                 .select(index)
                 .context("failed to select a pane by index")?,
+            AppAction::ToggleInputMode => {
+                self.is_in_insert_mode = self.get_active_pane_mut()?.toggle_input_mode();
+            }
+            AppAction::InputCharacter(input) => {
+                self.get_active_pane_mut()?.on_input_character(input);
+            }
+            AppAction::InputDeleteCharacter => {
+                self.get_active_pane_mut()?.on_backspace();
+            }
             // Do nothing in cases when the help popup is active and the user tries to do something besides closing the popup.
             _ => {}
         };

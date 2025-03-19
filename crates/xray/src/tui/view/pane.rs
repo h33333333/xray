@@ -46,7 +46,12 @@ pub enum Pane {
 
 impl Pane {
     /// Returns a [Widget] that can be used to render the current pane in the terminal.
-    pub fn render<'a>(&'a self, state: &'a AppState, pane_rows: u16) -> anyhow::Result<impl Widget + 'a> {
+    pub fn render<'a>(
+        &'a self,
+        state: &'a AppState,
+        pane_rows: u16,
+        pane_cols: u16,
+    ) -> anyhow::Result<impl Widget + 'a> {
         let pane_is_active = state.active_pane == self.into() && !state.show_help_popup;
 
         let text_color = text_color(pane_is_active);
@@ -95,16 +100,19 @@ impl Pane {
                     },
                 );
 
-                // FIXME: add a scrollbar in case the terminal's width is too small to fit everything
+                // FIXME: add a horizontal scroll
                 Ok(Paragraph::new(Text::from(lines)).wrap(Wrap { trim: true }).block(block))
             }
             Pane::LayerInspector(pane_state) => {
                 let (layer_changeset, _) = state.get_aggregated_layers_changeset()?;
                 let (current_layer_digest, _) = state.get_selected_layer()?;
+                let show_path_filter =
+                    pane_is_active && (pane_state.is_showing_path_filter_input || !pane_state.path_filter.is_empty());
 
-                // Two rows are taken by the block borders
-                let remaining_rows = pane_rows - 2;
-                let lines = pane_state
+                let remaining_rows =
+                    // Two rows are taken by the block borders and one by the path filter input (if it's shown)
+                    pane_rows - 2 - show_path_filter.then_some(1).unwrap_or_default();
+                let mut lines = pane_state
                     .changeset_to_lines(
                         layer_changeset,
                         |node_is_active, node_updated_in, node_is_deleted, node_is_modified| {
@@ -130,6 +138,20 @@ impl Pane {
                     )
                     .context("layer inspector: failed to render a changeset")?;
 
+                if show_path_filter {
+                    // Two columns are taken by the borders
+                    let pane_cols = Into::<usize>::into(pane_cols) - 2;
+                    lines.push(
+                        // FIXME: this is WIP
+                        Line::from(
+                            format!("{:<pane_cols$}", format!(" Path filter: {}", pane_state.path_filter)).bold(),
+                        )
+                        .black()
+                        .on_white(),
+                    );
+                }
+
+                // FIXME: add a horizontal scroll
                 Ok(Paragraph::new(Text::from(lines)).block(block))
             }
         }
@@ -236,6 +258,46 @@ impl Pane {
         };
 
         Ok(())
+    }
+
+    /// Toggles the input mode and allows the [Pane] to accept user's input without processing any special keys.
+    ///
+    /// What exactly user inputs depends on the [Pane] itself.
+    pub fn toggle_input_mode(&mut self) -> bool {
+        // Only the inspector pane supports this action for now.
+        if let Pane::LayerInspector(pane_state) = self {
+            return pane_state.toggle_path_filter_input();
+        };
+
+        false
+    }
+
+    /// Handles user's input when in "insert" mode.
+    ///
+    /// How user's input is handled depends on the [Pane] itself.
+    ///
+    /// # Safety
+    ///
+    /// Should be called only in insert mode.
+    pub fn on_input_character(&mut self, input: char) {
+        // Only the inspector pane supports this action for now.
+        if let Pane::LayerInspector(pane_state) = self {
+            pane_state.append_to_path_filter(input);
+        };
+    }
+
+    /// Handles a backspace when in "insert" mode.
+    ///
+    /// How it's handled depends on the [Pane] itself.
+    ///
+    /// # Safety
+    ///
+    /// Should be called only in insert mode.
+    pub fn on_backspace(&mut self) {
+        // Only the inspector pane supports this action for now.
+        if let Pane::LayerInspector(pane_state) = self {
+            pane_state.pop_char_from_path_filter();
+        };
     }
 
     /// Returns a styled [Block] for the pane.

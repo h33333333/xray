@@ -1,6 +1,6 @@
 use action::Direction;
 use anyhow::Context;
-use crossterm::event::{self, Event, KeyCode, KeyEvent};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
 use dispatcher::Dispatcher;
 use store::AppState;
 use view::App;
@@ -28,12 +28,41 @@ pub fn run(mut dispatcher: AppDispatcher) -> anyhow::Result<()> {
 
     loop {
         let event = event::read()?;
+        let store = dispatcher.store();
 
         match event {
             // Re-render the interface when terminal window is resized
             Event::Resize(_, _) => dispatcher.dispatch(AppAction::Empty)?,
+            // If we are in the insert mode, we ignore all hotkeys except 'Enter' and 'CTRL-C'
+            Event::Key(event) if store.is_in_insert_mode => {
+                if event.code == KeyCode::Enter
+                    || (event.code == KeyCode::Char('c') && event.modifiers.intersects(KeyModifiers::CONTROL))
+                {
+                    dispatcher.dispatch(AppAction::ToggleInputMode)?;
+                    continue;
+                }
+
+                if event.code == KeyCode::Backspace || event.code == KeyCode::Delete {
+                    dispatcher.dispatch(AppAction::InputDeleteCharacter)?;
+                    continue;
+                }
+
+                if let KeyCode::Char(input) = event.code {
+                    let input = if event.modifiers.intersects(KeyModifiers::SHIFT) {
+                        input.to_ascii_uppercase()
+                    } else {
+                        input
+                    };
+                    dispatcher.dispatch(AppAction::InputCharacter(input))?;
+                }
+            }
             // Quit
-            Event::Key(event) if event.code == KeyCode::Char('q') => break Ok(()),
+            Event::Key(event)
+                if event.code == KeyCode::Char('q')
+                    || (event.code == KeyCode::Char('c') && event.modifiers.intersects(KeyModifiers::CONTROL)) =>
+            {
+                break Ok(());
+            }
             // Select next pane
             Event::Key(event) if event.code == KeyCode::Tab => {
                 dispatcher.dispatch(AppAction::TogglePane(Direction::Forward))?;
@@ -73,6 +102,12 @@ pub fn run(mut dispatcher: AppDispatcher) -> anyhow::Result<()> {
                     as usize;
                 // Convert to a 0-based index
                 dispatcher.dispatch(AppAction::SelectPane(index - 1))?;
+            }
+            // Toggle path filter input
+            Event::Key(event)
+                if event.code == KeyCode::Char('f') && event.modifiers.intersects(KeyModifiers::CONTROL) =>
+            {
+                dispatcher.dispatch(AppAction::ToggleInputMode)?;
             }
             // Ignore everything else
             evt => tracing::trace!("Ignoring an event: {:?}", evt),

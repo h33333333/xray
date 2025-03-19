@@ -99,7 +99,7 @@ fn render(frame: &mut Frame, state: &AppState) -> anyhow::Result<()> {
         frame.render_widget(
             pane.as_ref()
                 .context("bug: pane wasn't returned back after an operation")?
-                .render(state, pane_area.height)
+                .render(state, pane_area.height, pane_area.width)
                 .context("failed to render a frame")?,
             pane_area,
         );
