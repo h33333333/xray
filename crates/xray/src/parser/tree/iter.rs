@@ -15,7 +15,7 @@ impl<'a, 'f> TreeIter<'a, 'f> {
             tree,
             Path::new("."),
             0,
-            filter.and_then(|filter| filter.strip_prefix("/").ok()),
+            filter.map(|filter| filter.strip_prefix("/").ok().unwrap_or(filter)),
         ));
         TreeIter {
             queue,
@@ -43,6 +43,32 @@ impl<'a> Iterator for TreeIter<'a, '_> {
             .front()
             .is_some_and(|(_, _, next_depth, _)| next_depth == &depth);
 
+        let is_filtered_out = if let Some(remaining_path) = filter {
+            // A node is includedd if either its path satisfies the leftmost part of the filter or it's the root node,
+            // in which case we want to strip the lead `/` and continue filtering the actual nodes
+
+            if let Some(leftmost_part) = remaining_path.iter().next() {
+                path != Path::new(".")
+                    && !path
+                        .as_os_str()
+                        .to_str()
+                        // We need to convert both paths to a str to check for a partial match using `contains`
+                        .and_then(|path| leftmost_part.to_str().map(|leftmost_part| path.contains(leftmost_part)))
+                        // If anything fails here, include the node
+                        .unwrap_or(true)
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        // Do not do anything else with this node if it doesn't satisfy the filter
+        if is_filtered_out {
+            return self.next();
+        }
+
+        // TODO: improve active levels tracking when using filters
         if let Some(active_levels) = self.active_levels.as_mut() {
             if is_level_active {
                 // Mark current level as active
@@ -53,25 +79,15 @@ impl<'a> Iterator for TreeIter<'a, '_> {
             }
         }
 
-        let is_filtered_out = if let Some(remaining_path) = filter {
-            // A node is includedd if either its path satisfies the leftmost part of the filter or it's the root node,
-            // in which case we want to strip the lead `/` and continue filtering the actual nodes
-            !remaining_path.starts_with(path) && path != Path::new(".")
-        } else {
-            false
-        };
-
-        // Do not do anything else with this node if it doesn't satisfy the filter
-        if is_filtered_out {
-            return self.next();
-        }
-
         if let Some(children) = next_node.node.children() {
             for (child_path, node) in children.iter().rev() {
                 let filter_for_child = filter
                     .and_then(|current_filter| {
                         if path != Path::new(".") {
-                            current_filter.strip_prefix(path).ok()
+                            current_filter
+                                .iter()
+                                .next()
+                                .and_then(|next_part| current_filter.strip_prefix(next_part).ok())
                         } else {
                             // Pass the filter as is
                             Some(current_filter)

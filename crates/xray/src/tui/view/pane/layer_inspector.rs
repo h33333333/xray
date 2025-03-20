@@ -209,7 +209,7 @@ impl LayerInspectorPane {
     pub fn toggle_active_node(&mut self, state: &AppState) -> anyhow::Result<()> {
         let (tree, _) = state.get_aggregated_layers_changeset()?;
         let (_, (_, current_node, _, _)) = tree
-            .iter()
+            .iter_with_levels_and_filter(Path::new(&self.path_filter))
             .enumerate()
             .nth(self.current_node_idx + 1)
             .context("bug: current node has invalid index")?;
@@ -234,10 +234,12 @@ impl LayerInspectorPane {
     }
 
     pub fn append_to_path_filter(&mut self, input: char) {
+        self.reset();
         self.path_filter.push(input);
     }
 
     pub fn pop_char_from_path_filter(&mut self) {
+        self.reset();
         self.path_filter.pop();
     }
 
