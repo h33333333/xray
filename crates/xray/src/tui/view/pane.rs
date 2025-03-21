@@ -14,6 +14,7 @@ use layer_info::LayerInfoField;
 pub use layer_info::LayerInfoPane;
 pub use layer_inspector::LayerInspectorPane;
 pub use layer_selector::LayerSelectorPane;
+use ratatui::layout::Constraint;
 use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::block::Title;
@@ -25,6 +26,7 @@ use style::{
 pub(super) use style::{FIELD_KEY_STYLE, FIELD_VALUE_STYLE};
 use util::fields_into_lines;
 
+use super::pane_with_popup::PaneWithPopup;
 use super::{ActivePane, SideEffect};
 use crate::tui::action::Direction;
 use crate::tui::store::AppState;
@@ -46,18 +48,15 @@ pub enum Pane {
 
 impl Pane {
     /// Returns a [Widget] that can be used to render the current pane in the terminal.
-    pub fn render<'a>(
-        &'a self,
-        state: &'a AppState,
-        pane_rows: u16,
-        pane_cols: u16,
-    ) -> anyhow::Result<impl Widget + 'a> {
+    pub fn render<'a>(&'a self, state: &'a AppState, pane_rows: u16) -> anyhow::Result<impl Widget + 'a> {
         let pane_is_active = state.active_pane == self.into() && !state.show_help_popup;
 
         let text_color = text_color(pane_is_active);
         let field_key_style = FIELD_KEY_STYLE.fg(text_color);
         let field_value_style = FIELD_VALUE_STYLE.fg(text_color);
         let active_field_style = ACTIVE_FIELD_STYLE.fg(text_color);
+
+        let mut widget = PaneWithPopup::<Paragraph, Paragraph>::new(None, None);
 
         let block = self.get_styled_block(pane_is_active);
         match self {
@@ -75,12 +74,12 @@ impl Pane {
                     },
                 );
 
-                Ok(Paragraph::new(Text::from(lines)).block(block))
+                widget.set_pane(Paragraph::new(Text::from(lines)).block(block));
             }
             Pane::LayerSelector(pane_state) => {
                 let lines = pane_state.lines(state.layers.iter(), field_value_style);
 
-                Ok(Paragraph::new(Text::from(lines)).block(block))
+                widget.set_pane(Paragraph::new(Text::from(lines)).block(block));
             }
             Pane::LayerInfo(pane_state) => {
                 let (selected_layer_digest, selected_layer) = state
@@ -101,18 +100,16 @@ impl Pane {
                 );
 
                 // FIXME: add a horizontal scroll
-                Ok(Paragraph::new(Text::from(lines)).wrap(Wrap { trim: true }).block(block))
+                widget.set_pane(Paragraph::new(Text::from(lines)).wrap(Wrap { trim: true }).block(block));
             }
             Pane::LayerInspector(pane_state) => {
                 let (layer_changeset, _) = state.get_aggregated_layers_changeset()?;
                 let (current_layer_digest, _) = state.get_selected_layer()?;
-                let show_path_filter =
-                    pane_is_active && (pane_state.is_showing_path_filter_input || !pane_state.path_filter.is_empty());
+                let show_path_filter = pane_is_active && pane_state.is_showing_path_filter_input;
 
-                let remaining_rows =
-                    // Two rows are taken by the block borders and one by the path filter input (if it's shown)
-                    pane_rows - 2 - show_path_filter.then_some(1).unwrap_or_default();
-                let mut lines = pane_state
+                // Two rows are taken by the block borders
+                let remaining_rows = pane_rows - 2;
+                let lines = pane_state
                     .changeset_to_lines(
                         layer_changeset,
                         |node_is_active, node_updated_in, node_is_deleted, node_is_modified| {
@@ -139,22 +136,30 @@ impl Pane {
                     .context("layer inspector: failed to render a changeset")?;
 
                 if show_path_filter {
-                    // Two columns are taken by the borders
-                    let pane_cols = Into::<usize>::into(pane_cols) - 2;
-                    lines.push(
-                        // FIXME: this is WIP
-                        Line::from(
-                            format!("{:<pane_cols$}", format!(" Path filter: {}", pane_state.path_filter)).bold(),
-                        )
-                        .black()
-                        .on_white(),
-                    );
+                    let block = Block::bordered()
+                        .border_type(BorderType::Thick)
+                        .padding(ratatui::widgets::Padding {
+                            left: 2,
+                            right: 2,
+                            top: 0,
+                            bottom: 0,
+                        })
+                        .title(Line::from("  Path Filter  ").centered());
+
+                    widget.set_popup((
+                        Paragraph::new(Text::from(pane_state.path_filter.as_str()))
+                            .wrap(Wrap { trim: false })
+                            .block(block),
+                        Some(Constraint::Length(3)),
+                        Some(Constraint::Percentage(70)),
+                    ));
                 }
 
                 // FIXME: add a horizontal scroll
-                Ok(Paragraph::new(Text::from(lines)).block(block))
+                widget.set_pane(Paragraph::new(Text::from(lines)).block(block));
             }
         }
+        Ok(widget)
     }
 
     /// Moves to the next entry in the specified [Direction] inside the [Pane].

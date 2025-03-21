@@ -75,7 +75,7 @@ impl LayerInspectorPane {
             }
 
             let (node_size, unit) = bytes_to_human_readable_units(node.node.size());
-            let node_is_active = idx == current_node_idx;
+            let node_is_active = idx == current_node_idx && !self.is_showing_path_filter_input;
 
             let mut node_tree_branch = String::with_capacity((depth - 1) * BRANCH_INDICATOR_LENGTH);
             // Skip the "." node

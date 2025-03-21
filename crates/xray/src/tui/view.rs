@@ -3,6 +3,7 @@ mod command_bar;
 mod help_popup;
 mod macros;
 mod pane;
+mod pane_with_popup;
 mod side_effect;
 
 use std::io;
@@ -45,7 +46,6 @@ impl App {
         self.terminal
             .try_draw(|frame| render(frame, store).map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{}", e))))
             .context("failed to redraw the frame")?;
-
         Ok(())
     }
 }
@@ -99,7 +99,7 @@ fn render(frame: &mut Frame, state: &AppState) -> anyhow::Result<()> {
         frame.render_widget(
             pane.as_ref()
                 .context("bug: pane wasn't returned back after an operation")?
-                .render(state, pane_area.height, pane_area.width)
+                .render(state, pane_area.height)
                 .context("failed to render a frame")?,
             pane_area,
         );
@@ -111,7 +111,7 @@ fn render(frame: &mut Frame, state: &AppState) -> anyhow::Result<()> {
     );
 
     if state.show_help_popup {
-        let popup_area = popup_area(frame.area());
+        let popup_area = popup_area(frame.area(), None, None);
         clear_area(frame, popup_area);
         frame.render_widget(
             HelpPopup::render(state).context("failed to render the help popup")?,
@@ -135,9 +135,10 @@ fn split_layout(initial_area: Rect) -> (PaneAreas, CommandBarArea) {
 }
 
 /// Returns a [Rect] that can be used to show a centered popup.
-fn popup_area(area: Rect) -> Rect {
-    let vertical = Layout::vertical([Constraint::Percentage(35)]).flex(Flex::Center);
-    let horizontal = Layout::horizontal([Constraint::Percentage(35)]).flex(Flex::Center);
+fn popup_area(area: Rect, vertical_constraint: Option<Constraint>, horizontal_constraint: Option<Constraint>) -> Rect {
+    let vertical = Layout::vertical([vertical_constraint.unwrap_or(Constraint::Percentage(35))]).flex(Flex::Center);
+    let horizontal =
+        Layout::horizontal([horizontal_constraint.unwrap_or(Constraint::Percentage(35))]).flex(Flex::Center);
     let [area] = vertical.areas(area);
     let [area] = horizontal.areas(area);
     area
