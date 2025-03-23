@@ -172,17 +172,24 @@ impl Node {
                     if !state.children.contains_key(Path::new(component)) {
                         state.children.insert(
                             Path::new(component).into(),
-                            Tree::new_with_node(
-                                layer_digest,
-                                Node::Directory(DirectoryState::new_with_size(new_node.size())),
-                            ),
+                            Tree::new_with_node(layer_digest, Node::Directory(DirectoryState::new_empty())),
                         );
                     }
-                    &mut state
+                    let existing_node = &mut state
                         .children
                         .get_mut(Path::new(component))
                         .context("impossible: we just inserted the node above")?
-                        .node
+                        .node;
+
+                    // Update the sizes
+                    if let Some(state) = existing_node.dir_state_mut() {
+                        match &mut state.status {
+                            NodeStatus::Added(size) | NodeStatus::Modified(size) => *size += new_node.size(),
+                            _ => (),
+                        }
+                    }
+
+                    existing_node
                 } else {
                     // NOTE: This happened in some images when I was testing the app.
                     // Some images change type of a node from directory to link back and forth before actually
@@ -218,12 +225,6 @@ impl Node {
                 .dir_state_mut()
                 .context("impossible: we created a directory above")?
         };
-
-        // Update the directory size
-        match &mut state.status {
-            NodeStatus::Added(size) | NodeStatus::Modified(size) => *size += new_node.size(),
-            _ => (),
-        }
 
         state
             .children
