@@ -6,7 +6,7 @@ use anyhow::Context;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 
-use crate::parser::{LayerChangeSet, Sha256Digest};
+use crate::parser::{LayerChangeSet, Sha256Digest, TreeFilter};
 use crate::tui::action::Direction;
 use crate::tui::store::AppState;
 use crate::tui::util::bytes_to_human_readable_units;
@@ -32,17 +32,11 @@ pub struct LayerInspectorPane {
     pub path_filter: String,
     /// Whether we are showing the path filter input at the bottom of the pane
     pub is_showing_path_filter_input: bool,
+    /// Current aggregated changeset with all user-selected filters applied.
+    pub filtered_changeset: Option<(LayerChangeSet, usize)>,
 }
 
 impl LayerInspectorPane {
-    /// Resets collapsed states and the current node index.
-    pub fn reset(&mut self) {
-        // TODO: make iter support dynamic collapsing (like when user wants to collapse/expand all directories and we don't know their indexes)
-        self.current_node_idx = 0;
-        self.collapsed_nodes_before_current = 0;
-        self.collapsed_nodes.clear();
-    }
-
     pub fn changeset_to_lines<'a>(
         &self,
         changeset: &'a LayerChangeSet,
@@ -56,9 +50,14 @@ impl LayerInspectorPane {
         let visible_rows: usize = visible_rows.into();
         let nodes_to_skip = self.nodes_to_skip_before_current_node(visible_rows);
 
-        let mut iter = changeset
-            .iter_with_levels_and_filter(Path::new(&self.path_filter))
-            .enumerate();
+        let changeset = if let Some((changeset, _)) = self.filtered_changeset.as_ref() {
+            // Use filtered changeset if present
+            changeset
+        } else {
+            changeset
+        };
+
+        let mut iter = changeset.iter_with_levels().enumerate();
         // HACK: mimic the `Skip` combinator
         iter.nth(nodes_to_skip);
         'outer: while let Some((idx, (path, node, depth, level_is_active))) = iter.next() {
@@ -144,8 +143,35 @@ impl LayerInspectorPane {
         Ok(lines)
     }
 
+    /// Resets collapsed states and the current node index.
+    pub fn reset(&mut self) {
+        // TODO: make iter support dynamic collapsing (like when user wants to collapse/expand all directories and we don't know their indexes)
+        self.current_node_idx = 0;
+        self.collapsed_nodes_before_current = 0;
+        self.collapsed_nodes.clear();
+    }
+
+    /// Updates [Self::filtered_changeset] by applying the active user-provided filters to the provided changeset.
+    pub fn filter_current_changeset(&mut self, changeset: &LayerChangeSet) {
+        if self.path_filter.is_empty() {
+            return;
+        };
+
+        let mut filtered_changeset = changeset.clone();
+        filtered_changeset.filter(TreeFilter::default().with_path_filter(Path::new(&self.path_filter)));
+        let n_of_nodes = filtered_changeset.iter().count();
+
+        self.filtered_changeset = Some((filtered_changeset, n_of_nodes));
+    }
+
     pub fn move_within_pane(&mut self, direction: Direction, state: &AppState) -> anyhow::Result<()> {
-        let (tree, total_nodes) = state.get_aggregated_layers_changeset()?;
+        let (tree, total_nodes) = if let Some((tree, total_nodes)) = self.filtered_changeset.as_ref() {
+            // Use the filtered changeset if it's present
+            (tree, *total_nodes)
+        } else {
+            state.get_aggregated_layers_changeset()?
+        };
+
         let total_nodes = total_nodes - 1 /* ignore the "." elemeent */;
         let n_of_current_node_child_nodes = self
             .is_current_node_collapsed()

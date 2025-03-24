@@ -117,20 +117,30 @@ impl AppState {
             .with_context(|| format!("bug: pane {:?} is no longer at its expected place", self.active_pane))
     }
 
-    fn reset_layer_inspector_pane(&mut self) -> anyhow::Result<()> {
+    fn on_changeset_updated(&mut self) -> anyhow::Result<()> {
         let layer_inspector_pane_idx: usize = ActivePane::LayerInspector.into();
-        let layer_inspector_pane = &mut self.panes[layer_inspector_pane_idx];
-        if let Some(Pane::LayerInspector(pane)) = layer_inspector_pane {
+        let mut layer_inspector_pane = self.panes[layer_inspector_pane_idx].take();
+
+        if let Some(Pane::LayerInspector(pane)) = layer_inspector_pane.as_mut() {
+            // Reset state
             pane.reset();
-            Ok(())
+
+            let (changeset, _) = self.get_aggregated_layers_changeset()?;
+            // Filter the new changeset if filters are present
+            pane.filter_current_changeset(changeset);
         } else {
             anyhow::bail!("layer inspector pane is no longer at the expected position in the UI");
         }
+
+        // Return the pane back
+        self.panes[layer_inspector_pane_idx].replace(layer_inspector_pane.expect("unreacheable"));
+
+        Ok(())
     }
 
     fn apply_side_effect(&mut self, side_effect: SideEffect) -> anyhow::Result<()> {
         match side_effect {
-            SideEffect::ResetLayerInspector => self.reset_layer_inspector_pane()?,
+            SideEffect::ChangesetUpdated => self.on_changeset_updated()?,
         }
         Ok(())
     }
@@ -149,23 +159,26 @@ impl Store for AppState {
                 let mut active_pane = self.panes[active_pane_idx]
                     .take()
                     .with_context(|| format!("bug: forgot to return the {} pane?", active_pane_idx))?;
-                match action {
-                    AppAction::Interact => active_pane
-                        .interact_within_pane(self)
-                        .context("error while handling the 'interact' action")?,
-                    AppAction::Move(direction) => {
-                        if let Some(side_effect) = active_pane
-                            .move_within_pane(direction, self)
-                            .context("error while handling the 'move' action")?
-                        {
-                            self.apply_side_effect(side_effect)
-                                .context("error while applying a side effect")?
-                        };
+                let side_effect: Option<SideEffect> = match action {
+                    AppAction::Interact => {
+                        active_pane
+                            .interact_within_pane(self)
+                            .context("error while handling the 'interact' action")?;
+                        None
                     }
+                    AppAction::Move(direction) => active_pane
+                        .move_within_pane(direction, self)
+                        .context("error while handling the 'move' action")?,
                     _ => unreachable!("Checked above"),
                 };
                 // Return the pane back
                 self.panes[active_pane_idx].replace(active_pane);
+
+                // Apply a side effect if any
+                if let Some(side_effect) = side_effect {
+                    self.apply_side_effect(side_effect)
+                        .context("error while applying a side effect")?
+                };
             }
             AppAction::Copy if !self.show_help_popup => {
                 if self.clipboard.is_none() {

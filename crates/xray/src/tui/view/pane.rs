@@ -207,7 +207,7 @@ impl Pane {
                 *selected_layers_changeset = (aggregated_layers, aggregated_layers_changeset_size);
 
                 // We need to reset the layer inspector pane, as its state is now invalid
-                return Ok(Some(SideEffect::ResetLayerInspector));
+                return Ok(Some(SideEffect::ChangesetUpdated));
             }
             Pane::LayerInfo(pane_state) => pane_state.active_field.toggle(direction),
             Pane::LayerInspector(pane_state) => pane_state.move_within_pane(direction, state)?,

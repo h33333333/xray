@@ -18,6 +18,7 @@ use indexmap::IndexMap;
 use json::{ImageHistory, ImageLayerConfigs, JsonBlob};
 use serde::de::DeserializeOwned;
 use tar::Archive;
+pub use tree::TreeFilter;
 use tree::{Node, Tree};
 use util::{determine_blob_type, get_entry_size_in_blocks, sha256_digest_from_hex};
 

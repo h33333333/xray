@@ -39,6 +39,15 @@ impl Tree {
         self
     }
 
+    pub fn filter(&mut self, filter: TreeFilter) -> bool {
+        self.node.filter(
+            // Strip the leading slash if present
+            filter
+                .path_filter
+                .map(|filter| filter.strip_prefix("/").ok().unwrap_or(filter)),
+        )
+    }
+
     pub fn iter(&self) -> TreeIter<'_, '_> {
         TreeIter::new(self, false, None)
     }
@@ -71,6 +80,19 @@ impl std::fmt::Debug for Tree {
             }
         }
         Ok(())
+    }
+}
+
+#[derive(Default)]
+pub struct TreeFilter<'a> {
+    pub path_filter: Option<&'a Path>,
+}
+
+impl TreeFilter<'_> {
+    pub fn with_path_filter(self, filter: &Path) -> TreeFilter<'_> {
+        TreeFilter {
+            path_filter: Some(filter),
+        }
     }
 }
 
@@ -154,6 +176,53 @@ impl Node {
 
     pub fn is_deleted(&self) -> bool {
         matches!(self.status(), NodeStatus::Deleted)
+    }
+
+    fn filter(&mut self, path_filter: Option<&Path>) -> bool {
+        let Some(filter) = path_filter else {
+            // No filter -> entry is always included
+            return true;
+        };
+
+        // We ignore files here, as they are handled when processing children of directories
+        if let Node::Directory(state) = self {
+            state.children.retain(|path, child| {
+                let is_filtered_out = if let Some(leftmost_part) = filter.iter().next() {
+                    path != Path::new(".")
+                        && !path
+                            .as_os_str()
+                            .to_str()
+                            // We need to convert both paths to a str to check for a partial match using `contains`
+                            .and_then(|path| leftmost_part.to_str().map(|leftmost_part| path.contains(leftmost_part)))
+                            // If anything fails here, exclude the node
+                            .unwrap_or(true)
+                } else {
+                    return true;
+                };
+
+                if is_filtered_out {
+                    return false;
+                }
+
+                let filter_for_child = if path != Path::new(".") {
+                    filter
+                        .iter()
+                        .next()
+                        .and_then(|next_part| filter.strip_prefix(next_part).ok())
+                } else {
+                    // Pass the filter as is
+                    Some(filter)
+                };
+
+                child.filter(TreeFilter {
+                    path_filter: filter_for_child.filter(|new_filter| !new_filter.as_os_str().is_empty()),
+                })
+            });
+
+            return !state.children.is_empty();
+        }
+
+        true
     }
 
     // TODO: rewrite this function to use recursion
