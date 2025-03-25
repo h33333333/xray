@@ -2,4 +2,6 @@
 pub enum SideEffect {
     /// The current changeset was updated.
     ChangesetUpdated,
+    /// The node filters were updated.
+    FiltersUpdated,
 }

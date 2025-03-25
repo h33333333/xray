@@ -268,13 +268,16 @@ impl Pane {
     /// Toggles the input mode and allows the [Pane] to accept user's input without processing any special keys.
     ///
     /// What exactly user inputs depends on the [Pane] itself.
-    pub fn toggle_input_mode(&mut self) -> bool {
+    pub fn toggle_input_mode(&mut self) -> (bool, Option<SideEffect>) {
         // Only the inspector pane supports this action for now.
         if let Pane::LayerInspector(pane_state) = self {
-            return pane_state.toggle_path_filter_input();
+            let input_is_active = pane_state.toggle_path_filter_input();
+            // Apply the filter only when user exits the input screen to avoid using a lot of resources for nothing
+            let side_effect = (!input_is_active).then_some(SideEffect::FiltersUpdated);
+            return (input_is_active, side_effect);
         };
 
-        false
+        (false, None)
     }
 
     /// Handles user's input when in "insert" mode.

@@ -140,7 +140,8 @@ impl AppState {
 
     fn apply_side_effect(&mut self, side_effect: SideEffect) -> anyhow::Result<()> {
         match side_effect {
-            SideEffect::ChangesetUpdated => self.on_changeset_updated()?,
+            // Both side effects lead to the same actions and are handled by the same handler
+            SideEffect::ChangesetUpdated | SideEffect::FiltersUpdated => self.on_changeset_updated()?,
         }
         Ok(())
     }
@@ -202,7 +203,11 @@ impl Store for AppState {
                 .select(index)
                 .context("failed to select a pane by index")?,
             AppAction::ToggleInputMode => {
-                self.is_in_insert_mode = self.get_active_pane_mut()?.toggle_input_mode();
+                let (is_in_insert_mode, side_effect) = self.get_active_pane_mut()?.toggle_input_mode();
+                if let Some(side_effect) = side_effect {
+                    self.apply_side_effect(side_effect)?;
+                }
+                self.is_in_insert_mode = is_in_insert_mode;
             }
             AppAction::InputCharacter(input) => {
                 self.get_active_pane_mut()?.on_input_character(input);

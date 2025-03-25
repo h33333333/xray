@@ -153,7 +153,8 @@ impl LayerInspectorPane {
 
     /// Updates [Self::filtered_changeset] by applying the active user-provided filters to the provided changeset.
     pub fn filter_current_changeset(&mut self, changeset: &LayerChangeSet) {
-        if self.path_filter.is_empty() {
+        if self.path_filter.is_empty() || self.path_filter == "/" {
+            self.filtered_changeset = None;
             return;
         };
 
@@ -173,6 +174,11 @@ impl LayerInspectorPane {
         };
 
         let total_nodes = total_nodes - 1 /* ignore the "." elemeent */;
+
+        if total_nodes == 0 {
+            return Ok(());
+        }
+
         let n_of_current_node_child_nodes = self
             .is_current_node_collapsed()
             .then(|| {
