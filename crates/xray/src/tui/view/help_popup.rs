@@ -57,7 +57,7 @@ fn get_common_hotkeys() -> Vec<(&'static str, &'static str)> {
         ("s-tab", "Select previous pane"),
         ("tab", "Select next pane"),
         ("q", "Exit from the app"),
-        ("0, 1, 2, 3", "Select the corresponding pane"),
+        ("1, 2, 3, 4", "Select the corresponding pane"),
     ]
 }
 

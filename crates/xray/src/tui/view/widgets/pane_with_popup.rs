@@ -1,10 +1,10 @@
 use ratatui::layout::Constraint;
 use ratatui::widgets::{Clear, Widget};
 
-use super::popup_area;
+use crate::tui::view::popup_area;
 
 /// A simple widget that allows rendering two widgets within the same area using a single method call to [Widget::render].
-pub(super) struct PaneWithPopup<W, P> {
+pub struct PaneWithPopup<W, P> {
     /// An optional pane that should be rendered.
     pane: Option<W>,
     /// An optional popup that should be rendered along with its vertical and horizontal area [Constraint].

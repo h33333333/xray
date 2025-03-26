@@ -6,6 +6,7 @@ use anyhow::Context;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 
+use super::filter_popup::FilterPopup;
 use crate::parser::{LayerChangeSet, Sha256Digest, TreeFilter};
 use crate::tui::action::Direction;
 use crate::tui::store::AppState;
@@ -23,17 +24,17 @@ const EXPANDED_NODE_STATUS_INDICATOR: &str = "─";
 #[derive(Debug, Default)]
 pub struct LayerInspectorPane {
     /// Index of the currently selected node in the tree
-    pub current_node_idx: usize,
+    current_node_idx: usize,
     /// Number of collapsed nodes before the current one
-    pub collapsed_nodes_before_current: usize,
+    collapsed_nodes_before_current: usize,
     /// Maps indexes of all nodes that are collapsed to the number of their children
-    pub collapsed_nodes: BTreeMap<usize, usize>,
-    /// Path-based filter supplied by the user
-    pub path_filter: String,
-    /// Whether we are showing the path filter input at the bottom of the pane
-    pub is_showing_path_filter_input: bool,
+    collapsed_nodes: BTreeMap<usize, usize>,
+    /// The filter popup state.
+    pub filter_popup: FilterPopup,
+    /// Whether we are showing the filter popup and are accepting the user's input.
+    pub is_showing_filter_popup: bool,
     /// Current aggregated changeset with all user-selected filters applied.
-    pub filtered_changeset: Option<(LayerChangeSet, usize)>,
+    filtered_changeset: Option<(LayerChangeSet, usize)>,
 }
 
 impl LayerInspectorPane {
@@ -74,7 +75,7 @@ impl LayerInspectorPane {
             }
 
             let (node_size, unit) = bytes_to_human_readable_units(node.node.size());
-            let node_is_active = idx == current_node_idx && !self.is_showing_path_filter_input;
+            let node_is_active = idx == current_node_idx && !self.is_showing_filter_popup;
 
             let mut node_tree_branch = String::with_capacity((depth - 1) * BRANCH_INDICATOR_LENGTH);
             // Skip the "." node
@@ -153,19 +154,24 @@ impl LayerInspectorPane {
 
     /// Updates [Self::filtered_changeset] by applying the active user-provided filters to the provided changeset.
     pub fn filter_current_changeset(&mut self, changeset: &LayerChangeSet) {
-        if self.path_filter.is_empty() || self.path_filter == "/" {
+        if self.filter_popup.path_filter.is_empty() || self.filter_popup.path_filter == "/" {
             self.filtered_changeset = None;
             return;
         };
 
         let mut filtered_changeset = changeset.clone();
-        filtered_changeset.filter(TreeFilter::default().with_path_filter(Path::new(&self.path_filter)));
+        filtered_changeset.filter(TreeFilter::default().with_path_filter(Path::new(&self.filter_popup.path_filter)));
         let n_of_nodes = filtered_changeset.iter().count();
 
         self.filtered_changeset = Some((filtered_changeset, n_of_nodes));
     }
 
     pub fn move_within_pane(&mut self, direction: Direction, state: &AppState) -> anyhow::Result<()> {
+        if self.is_showing_filter_popup {
+            self.filter_popup.active_input.toggle(direction);
+            return Ok(());
+        }
+
         let (tree, total_nodes) = if let Some((tree, total_nodes)) = self.filtered_changeset.as_ref() {
             // Use the filtered changeset if it's present
             (tree, *total_nodes)
@@ -239,9 +245,14 @@ impl LayerInspectorPane {
     }
 
     pub fn toggle_active_node(&mut self, state: &AppState) -> anyhow::Result<()> {
+        if self.is_showing_filter_popup {
+            self.filter_popup.toggle_active_input();
+            return Ok(());
+        }
+
         let (tree, _) = state.get_aggregated_layers_changeset()?;
         let (_, (_, current_node, _, _)) = tree
-            .iter_with_levels_and_filter(Path::new(&self.path_filter))
+            .iter_with_levels_and_filter(Path::new(&self.filter_popup.path_filter))
             .enumerate()
             .nth(self.current_node_idx + 1)
             .context("bug: current node has invalid index")?;
@@ -261,18 +272,16 @@ impl LayerInspectorPane {
     }
 
     pub fn toggle_path_filter_input(&mut self) -> bool {
-        self.is_showing_path_filter_input = !self.is_showing_path_filter_input;
-        self.is_showing_path_filter_input
+        self.is_showing_filter_popup = !self.is_showing_filter_popup;
+        self.is_showing_filter_popup
     }
 
-    pub fn append_to_path_filter(&mut self, input: char) {
-        self.reset();
-        self.path_filter.push(input);
+    pub fn append_to_filter(&mut self, input: char) {
+        self.filter_popup.append_to_filter(input);
     }
 
-    pub fn pop_char_from_path_filter(&mut self) {
-        self.reset();
-        self.path_filter.pop();
+    pub fn pop_from_filter(&mut self) {
+        self.filter_popup.pop_from_filter();
     }
 
     fn is_node_collapsed(&self, idx: usize) -> bool {

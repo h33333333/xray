@@ -1,3 +1,4 @@
+mod filter_popup;
 mod image_info;
 mod layer_info;
 mod layer_inspector;
@@ -14,7 +15,6 @@ use layer_info::LayerInfoField;
 pub use layer_info::LayerInfoPane;
 pub use layer_inspector::LayerInspectorPane;
 pub use layer_selector::LayerSelectorPane;
-use ratatui::layout::Constraint;
 use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::block::Title;
@@ -26,7 +26,7 @@ use style::{
 pub(super) use style::{FIELD_KEY_STYLE, FIELD_VALUE_STYLE};
 use util::fields_into_lines;
 
-use super::pane_with_popup::PaneWithPopup;
+use super::widgets::PaneWithPopup;
 use super::{ActivePane, SideEffect};
 use crate::tui::action::Direction;
 use crate::tui::store::AppState;
@@ -105,7 +105,7 @@ impl Pane {
             Pane::LayerInspector(pane_state) => {
                 let (layer_changeset, _) = state.get_aggregated_layers_changeset()?;
                 let (current_layer_digest, _) = state.get_selected_layer()?;
-                let show_path_filter = pane_is_active && pane_state.is_showing_path_filter_input;
+                let show_path_filter = pane_is_active && pane_state.is_showing_filter_popup;
 
                 // Two rows are taken by the block borders
                 let remaining_rows = pane_rows - 2;
@@ -136,23 +136,8 @@ impl Pane {
                     .context("layer inspector: failed to render a changeset")?;
 
                 if show_path_filter {
-                    let block = Block::bordered()
-                        .border_type(BorderType::Thick)
-                        .padding(ratatui::widgets::Padding {
-                            left: 2,
-                            right: 2,
-                            top: 0,
-                            bottom: 0,
-                        })
-                        .title(Line::from("  Path Filter  ").centered());
-
-                    widget.set_popup((
-                        Paragraph::new(Text::from(pane_state.path_filter.as_str()))
-                            .wrap(Wrap { trim: false })
-                            .block(block),
-                        Some(Constraint::Length(3)),
-                        Some(Constraint::Percentage(70)),
-                    ));
+                    let (popup, v_constraint, h_constraint) = pane_state.filter_popup.render_with_layout_constraints();
+                    widget.set_popup((popup, Some(v_constraint), Some(h_constraint)));
                 }
 
                 // FIXME: add a horizontal scroll
@@ -290,7 +275,7 @@ impl Pane {
     pub fn on_input_character(&mut self, input: char) {
         // Only the inspector pane supports this action for now.
         if let Pane::LayerInspector(pane_state) = self {
-            pane_state.append_to_path_filter(input);
+            pane_state.append_to_filter(input);
         };
     }
 
@@ -304,7 +289,7 @@ impl Pane {
     pub fn on_backspace(&mut self) {
         // Only the inspector pane supports this action for now.
         if let Pane::LayerInspector(pane_state) = self {
-            pane_state.pop_char_from_path_filter();
+            pane_state.pop_from_filter();
         };
     }
 

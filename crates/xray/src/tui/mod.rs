@@ -36,6 +36,7 @@ pub fn run(mut dispatcher: AppDispatcher) -> anyhow::Result<()> {
             // If we are in the insert mode, we ignore all hotkeys except 'Enter' and 'CTRL-C'
             Event::Key(event) if store.is_in_insert_mode => {
                 if event.code == KeyCode::Enter
+                    || event.code == KeyCode::Esc
                     || (event.code == KeyCode::Char('c') && event.modifiers.intersects(KeyModifiers::CONTROL))
                 {
                     dispatcher.dispatch(AppAction::ToggleInputMode)?;
@@ -44,6 +45,21 @@ pub fn run(mut dispatcher: AppDispatcher) -> anyhow::Result<()> {
 
                 if event.code == KeyCode::Backspace || event.code == KeyCode::Delete {
                     dispatcher.dispatch(AppAction::InputDeleteCharacter)?;
+                    continue;
+                }
+
+                if event.code == KeyCode::Char('l') && event.modifiers.intersects(KeyModifiers::CONTROL) {
+                    dispatcher.dispatch(AppAction::Interact)?;
+                    continue;
+                }
+
+                if event.code == KeyCode::Tab || event.code == KeyCode::BackTab {
+                    let direction = if event.code == KeyCode::Tab {
+                        Direction::Forward
+                    } else {
+                        Direction::Backward
+                    };
+                    dispatcher.dispatch(AppAction::Move(direction))?;
                     continue;
                 }
 

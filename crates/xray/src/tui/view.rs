@@ -3,8 +3,8 @@ mod command_bar;
 mod help_popup;
 mod macros;
 mod pane;
-mod pane_with_popup;
 mod side_effect;
+mod widgets;
 
 use std::io;
 
