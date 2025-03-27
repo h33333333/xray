@@ -1,14 +1,13 @@
+#![allow(unused_doc_comments)]
+
 use std::fmt::Write as _;
 
 use arboard::Clipboard;
 
+use crate::render_order_enum;
+
 /// Represents the unit of a value.
-pub(crate) enum Unit {
-    Bytes,
-    Kilobytes,
-    Megabytes,
-    Gigabytes,
-}
+render_order_enum!(Unit, Bytes, Kilobytes, Megabytes, Gigabytes);
 
 impl Unit {
     const KILOBYTE: u64 = 1000;
@@ -21,6 +20,15 @@ impl Unit {
             Unit::Kilobytes => "kB",
             Unit::Megabytes => "MB",
             Unit::Gigabytes => "GB",
+        }
+    }
+
+    pub fn scale_to_units(&self, value: u64) -> u64 {
+        match self {
+            Unit::Bytes => value,
+            Unit::Kilobytes => value * Self::KILOBYTE,
+            Unit::Megabytes => value * Self::MEGABYTE,
+            Unit::Gigabytes => value * Self::GIGABYTE,
         }
     }
 }

@@ -7,7 +7,7 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 
 use super::filter_popup::FilterPopup;
-use crate::parser::{LayerChangeSet, Sha256Digest, TreeFilter};
+use crate::parser::{LayerChangeSet, Sha256Digest};
 use crate::tui::action::Direction;
 use crate::tui::store::AppState;
 use crate::tui::util::bytes_to_human_readable_units;
@@ -154,13 +154,13 @@ impl LayerInspectorPane {
 
     /// Updates [Self::filtered_changeset] by applying the active user-provided filters to the provided changeset.
     pub fn filter_current_changeset(&mut self, changeset: &LayerChangeSet) {
-        if self.filter_popup.path_filter.is_empty() || self.filter_popup.path_filter == "/" {
+        if !self.filter_popup.filters().any() {
             self.filtered_changeset = None;
             return;
         };
 
         let mut filtered_changeset = changeset.clone();
-        filtered_changeset.filter(TreeFilter::default().with_path_filter(Path::new(&self.filter_popup.path_filter)));
+        filtered_changeset.filter(self.filter_popup.filters());
         let n_of_nodes = filtered_changeset.iter().count();
 
         self.filtered_changeset = Some((filtered_changeset, n_of_nodes));

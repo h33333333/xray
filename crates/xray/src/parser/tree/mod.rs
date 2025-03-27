@@ -39,13 +39,12 @@ impl Tree {
         self
     }
 
-    pub fn filter(&mut self, filter: TreeFilter) -> bool {
-        self.node.filter(
-            // Strip the leading slash if present
-            filter
-                .path_filter
-                .map(|filter| filter.strip_prefix("/").ok().unwrap_or(filter)),
-        )
+    pub fn filter(&mut self, mut filter: TreeFilter) -> bool {
+        // Strip the leading slash if present
+        filter.path_filter = filter
+            .path_filter
+            .map(|filter| filter.strip_prefix("/").ok().unwrap_or(filter));
+        self.node.filter(filter)
     }
 
     pub fn iter(&self) -> TreeIter<'_, '_> {
@@ -85,14 +84,27 @@ impl std::fmt::Debug for Tree {
 
 #[derive(Default)]
 pub struct TreeFilter<'a> {
-    pub path_filter: Option<&'a Path>,
+    path_filter: Option<&'a Path>,
+    node_size_filter: Option<u64>,
 }
 
 impl TreeFilter<'_> {
     pub fn with_path_filter(self, filter: &Path) -> TreeFilter<'_> {
         TreeFilter {
             path_filter: Some(filter),
+            node_size_filter: self.node_size_filter,
         }
+    }
+
+    pub fn with_size_filter(self, filter: u64) -> Self {
+        TreeFilter {
+            path_filter: self.path_filter,
+            node_size_filter: Some(filter),
+        }
+    }
+
+    pub fn any(&self) -> bool {
+        self.path_filter.is_some() || self.node_size_filter.is_some()
     }
 }
 
@@ -178,44 +190,61 @@ impl Node {
         matches!(self.status(), NodeStatus::Deleted)
     }
 
-    fn filter(&mut self, path_filter: Option<&Path>) -> bool {
-        let Some(filter) = path_filter else {
-            // No filter -> entry is always included
+    fn filter(&mut self, filter: TreeFilter) -> bool {
+        if !filter.any() {
+            // No filters -> entry is always included
             return true;
-        };
+        }
 
         // We ignore files here, as they are handled when processing children of directories
         if let Node::Directory(state) = self {
             state.children.retain(|path, child| {
-                let is_filtered_out = if let Some(leftmost_part) = filter.iter().next() {
-                    path != Path::new(".")
-                        && !path
-                            .as_os_str()
-                            .to_str()
-                            // We need to convert both paths to a str to check for a partial match using `contains`
-                            .and_then(|path| leftmost_part.to_str().map(|leftmost_part| path.contains(leftmost_part)))
-                            // If anything fails here, exclude the node
-                            .unwrap_or(true)
-                } else {
-                    return true;
-                };
-
-                if is_filtered_out {
-                    return false;
+                // Size-based filtering
+                if let Some(node_size_filter) = filter.node_size_filter {
+                    if child.node.size() < node_size_filter {
+                        return false;
+                    }
                 }
 
-                let filter_for_child = if path != Path::new(".") {
-                    filter
-                        .iter()
-                        .next()
-                        .and_then(|next_part| filter.strip_prefix(next_part).ok())
+                // Path-based filtering
+                let path_filter_for_child = if let Some(path_filter) = filter.path_filter {
+                    let is_filtered_out = if let Some(leftmost_part) = filter.path_filter.iter().next() {
+                        path != Path::new(".")
+                            && !path
+                                .as_os_str()
+                                .to_str()
+                                // We need to convert both paths to a str to check for a partial match using `contains`
+                                .and_then(|path| {
+                                    leftmost_part.to_str().map(|leftmost_part| path.contains(leftmost_part))
+                                })
+                                // If anything fails here, exclude the node
+                                .unwrap_or(true)
+                    } else {
+                        return true;
+                    };
+
+                    if is_filtered_out {
+                        return false;
+                    }
+
+                    let raw_filter = if path != Path::new(".") {
+                        path_filter
+                            .iter()
+                            .next()
+                            .and_then(|next_part| path_filter.strip_prefix(next_part).ok())
+                    } else {
+                        // Pass the filter as is
+                        Some(path_filter)
+                    };
+
+                    raw_filter.filter(|new_filter| !new_filter.as_os_str().is_empty())
                 } else {
-                    // Pass the filter as is
-                    Some(filter)
+                    None
                 };
 
                 child.filter(TreeFilter {
-                    path_filter: filter_for_child.filter(|new_filter| !new_filter.as_os_str().is_empty()),
+                    path_filter: path_filter_for_child,
+                    node_size_filter: filter.node_size_filter,
                 })
             });
 

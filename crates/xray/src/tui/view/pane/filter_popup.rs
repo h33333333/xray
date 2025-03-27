@@ -1,10 +1,14 @@
+use std::path::Path;
+
 use ratatui::layout::Constraint;
 use ratatui::style::{Color, Stylize};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::{Block, BorderType, Padding, Paragraph, Wrap};
 
+use crate::parser::TreeFilter;
 use crate::render_order_enum;
 use crate::tui::action::Direction;
+use crate::tui::util::Unit;
 
 const POPUP_PADDING: Padding = Padding {
     left: 2,
@@ -14,30 +18,18 @@ const POPUP_PADDING: Padding = Padding {
 };
 
 render_order_enum!(FilterInput, PathFilter, SizeFilter);
-render_order_enum!(SizeFilterUnits, Bytes, Kilobytes, Megabytes, Gigabytes);
-
-impl SizeFilterUnits {
-    pub fn human_readable(&self) -> &'static str {
-        match self {
-            SizeFilterUnits::Bytes => "B",
-            SizeFilterUnits::Kilobytes => "kB",
-            SizeFilterUnits::Megabytes => "MB",
-            SizeFilterUnits::Gigabytes => "GB",
-        }
-    }
-}
 
 #[derive(Default, Debug)]
 pub struct FilterPopup {
     /// Currently active filter input
     pub active_input: FilterInput,
     /// Units used for the node size filter
-    pub size_filter_units: SizeFilterUnits,
+    pub size_filter_units: Unit,
     /// Path-based filter supplied by the user
     pub path_filter: String,
     // FIXME: make node size filter actually work
     /// Node size filter supplied by the user
-    pub node_size_filter: usize,
+    pub node_size_filter: u64,
 }
 
 impl FilterPopup {
@@ -69,7 +61,7 @@ impl FilterPopup {
             FilterInput::PathFilter => self.path_filter.push(input),
             FilterInput::SizeFilter => {
                 if let Some(digit) = input.to_digit(10) {
-                    self.node_size_filter = self.node_size_filter * 10 + digit as usize
+                    self.node_size_filter = self.node_size_filter * 10 + digit as u64
                 }
             }
         }
@@ -88,6 +80,16 @@ impl FilterPopup {
         if matches!(self.active_input, FilterInput::SizeFilter) {
             self.size_filter_units.toggle(Direction::Forward);
         }
+    }
+
+    pub fn filters(&self) -> TreeFilter<'_> {
+        TreeFilter::default()
+            .with_path_filter(Path::new(&self.path_filter))
+            .with_size_filter(self.size_filter_in_units())
+    }
+
+    fn size_filter_in_units(&self) -> u64 {
+        self.size_filter_units.scale_to_units(self.node_size_filter)
     }
 
     fn title(&self) -> &'static str {
