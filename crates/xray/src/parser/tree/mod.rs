@@ -1,10 +1,12 @@
 mod iter;
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use iter::TreeIter;
+use regex::Regex;
 
 use super::{DirectoryState, FileState, NodeStatus, Sha256Digest};
 
@@ -83,16 +85,18 @@ impl std::fmt::Debug for Tree {
 }
 
 #[derive(Default)]
-pub struct TreeFilter<'a> {
+pub struct TreeFilter<'a, 'r> {
     path_filter: Option<&'a Path>,
     node_size_filter: Option<u64>,
+    path_regexp: Option<Cow<'r, Regex>>,
 }
 
-impl TreeFilter<'_> {
-    pub fn with_path_filter(self, filter: &Path) -> TreeFilter<'_> {
+impl<'a, 'r> TreeFilter<'a, 'r> {
+    pub fn with_path_filter<'n>(self, filter: &'n Path) -> TreeFilter<'n, 'r> {
         TreeFilter {
             path_filter: Some(filter),
             node_size_filter: self.node_size_filter,
+            path_regexp: None,
         }
     }
 
@@ -100,11 +104,20 @@ impl TreeFilter<'_> {
         TreeFilter {
             path_filter: self.path_filter,
             node_size_filter: Some(filter),
+            path_regexp: self.path_regexp,
+        }
+    }
+
+    pub fn with_regex<'n>(self, regex: Cow<'n, Regex>) -> TreeFilter<'a, 'n> {
+        TreeFilter {
+            path_filter: None,
+            node_size_filter: self.node_size_filter,
+            path_regexp: Some(regex),
         }
     }
 
     pub fn any(&self) -> bool {
-        self.path_filter.is_some() || self.node_size_filter.is_some()
+        self.path_filter.is_some() || self.node_size_filter.is_some() || self.path_regexp.is_some()
     }
 }
 
@@ -242,9 +255,23 @@ impl Node {
                     None
                 };
 
+                // Regex-based filtering
+                if let Some(regex) = filter.path_regexp.as_deref() {
+                    let Some(path) = path.to_str() else {
+                        // Exclude this node otherwise
+                        return false;
+                    };
+
+                    // Directories are filtered based on their children
+                    if !child.node.is_dir() && !regex.is_match(path) {
+                        return false;
+                    }
+                }
+
                 child.filter(TreeFilter {
                     path_filter: path_filter_for_child,
                     node_size_filter: filter.node_size_filter,
+                    path_regexp: filter.path_regexp.as_deref().map(Cow::Borrowed),
                 })
             });
 

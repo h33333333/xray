@@ -1585,6 +1585,7 @@ dependencies = [
  "formatted-index-macro",
  "indexmap",
  "ratatui",
+ "regex",
  "serde",
  "serde_json",
  "tar",
