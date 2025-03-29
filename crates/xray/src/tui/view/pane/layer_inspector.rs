@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
-use std::path::Path;
 
 use anyhow::Context;
 use ratatui::style::Style;
@@ -250,9 +249,15 @@ impl LayerInspectorPane {
             return Ok(());
         }
 
-        let (tree, _) = state.get_aggregated_layers_changeset()?;
+        let (tree, _) = if let Some((tree, total_nodes)) = self.filtered_changeset.as_ref() {
+            // Use the filtered changeset if it's present
+            (tree, *total_nodes)
+        } else {
+            state.get_aggregated_layers_changeset()?
+        };
+
         let (_, (_, current_node, _, _)) = tree
-            .iter_with_levels_and_filter(Path::new(&self.filter_popup.path_filter))
+            .iter()
             .enumerate()
             .nth(self.current_node_idx + 1)
             .context("bug: current node has invalid index")?;

@@ -158,6 +158,14 @@ impl Pane {
             }) => {
                 // FIXME: move this logic somewhere else
                 let current_layer_idx = *selected_layer_idx;
+
+                if current_layer_idx == state.layers.len() - 1 && matches!(direction, Direction::Forward)
+                    || current_layer_idx == 0 && matches!(direction, Direction::Backward)
+                {
+                    // Don't allow cycling through the layers endlessly
+                    return Ok(None);
+                }
+
                 let next_layer_idx = match direction {
                     Direction::Forward => (current_layer_idx + 1) % state.layers.len(),
                     Direction::Backward => (current_layer_idx + state.layers.len() - 1) % state.layers.len(),
@@ -184,8 +192,6 @@ impl Pane {
                     }
                 }
 
-                // TODO: check if user has provided a filter when calculating the changeset size and adjust the logic here accordingly
-                // TODO: whenever filter changes, I will have to recalculate the number of nodes, as the layer inspector pane depends on that information
                 let aggregated_layers_changeset_size = aggregated_layers.iter().count();
                 *selected_layer_digest = *digest;
                 *selected_layer_idx = next_layer_idx;

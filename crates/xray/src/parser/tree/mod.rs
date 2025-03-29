@@ -42,23 +42,20 @@ impl Tree {
     }
 
     pub fn filter(&mut self, mut filter: TreeFilter) -> bool {
-        // Strip the leading slash if present
-        filter.path_filter = filter
-            .path_filter
-            .map(|filter| filter.strip_prefix("/").ok().unwrap_or(filter));
+        // Strip the leading slash from the path filter if it's present
+        if let Some(path_filter) = filter.path_filter.as_mut() {
+            path_filter.path = path_filter.path.strip_prefix("/").ok().unwrap_or(path_filter.path);
+        }
+
         self.node.filter(filter)
     }
 
-    pub fn iter(&self) -> TreeIter<'_, '_> {
-        TreeIter::new(self, false, None)
+    pub fn iter(&self) -> TreeIter<'_> {
+        TreeIter::new(self, false)
     }
 
-    pub fn iter_with_levels(&self) -> TreeIter<'_, '_> {
-        TreeIter::new(self, true, None)
-    }
-
-    pub fn iter_with_levels_and_filter<'filter>(&self, filter: &'filter Path) -> TreeIter<'_, 'filter> {
-        TreeIter::new(self, true, Some(filter))
+    pub fn iter_with_levels(&self) -> TreeIter<'_> {
+        TreeIter::new(self, true)
     }
 }
 
@@ -84,9 +81,46 @@ impl std::fmt::Debug for Tree {
     }
 }
 
+#[derive(Clone)]
+struct RestorablePathFilter<'a> {
+    path: &'a Path,
+    current_component_idx: u8,
+    is_using_relative_path: bool,
+}
+
+impl<'a> RestorablePathFilter<'a> {
+    fn new(path: &'a Path) -> Self {
+        RestorablePathFilter {
+            path,
+            current_component_idx: 0,
+            is_using_relative_path: !path.starts_with("/"),
+        }
+    }
+
+    fn get_current_component(&self) -> Option<&Path> {
+        self.path.iter().nth(self.current_component_idx as usize).map(Path::new)
+    }
+
+    fn restore(&self) -> Self {
+        RestorablePathFilter {
+            path: self.path,
+            current_component_idx: 0,
+            is_using_relative_path: self.is_using_relative_path,
+        }
+    }
+
+    fn advance(&self) -> Self {
+        RestorablePathFilter {
+            path: self.path,
+            current_component_idx: self.current_component_idx + 1,
+            is_using_relative_path: self.is_using_relative_path,
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct TreeFilter<'a, 'r> {
-    path_filter: Option<&'a Path>,
+    path_filter: Option<RestorablePathFilter<'a>>,
     node_size_filter: Option<u64>,
     path_regexp: Option<Cow<'r, Regex>>,
 }
@@ -94,7 +128,7 @@ pub struct TreeFilter<'a, 'r> {
 impl<'a, 'r> TreeFilter<'a, 'r> {
     pub fn with_path_filter<'n>(self, filter: &'n Path) -> TreeFilter<'n, 'r> {
         TreeFilter {
-            path_filter: Some(filter),
+            path_filter: Some(RestorablePathFilter::new(filter)),
             node_size_filter: self.node_size_filter,
             path_regexp: None,
         }
@@ -212,6 +246,12 @@ impl Node {
         // We ignore files here, as they are handled when processing children of directories
         if let Node::Directory(state) = self {
             state.children.retain(|path, child| {
+                let is_dir_with_children = child
+                    .node
+                    .children()
+                    .map(|children| !children.is_empty())
+                    .unwrap_or(false);
+
                 // Size-based filtering
                 if let Some(node_size_filter) = filter.node_size_filter {
                     if child.node.size() < node_size_filter {
@@ -220,8 +260,8 @@ impl Node {
                 }
 
                 // Path-based filtering
-                let path_filter_for_child = if let Some(path_filter) = filter.path_filter {
-                    let is_filtered_out = if let Some(leftmost_part) = filter.path_filter.iter().next() {
+                let path_filter_for_child = if let Some(path_filter) = filter.path_filter.as_ref() {
+                    let is_filtered_out = if let Some(leftmost_part) = path_filter.get_current_component() {
                         path != Path::new(".")
                             && !path
                                 .as_os_str()
@@ -233,24 +273,43 @@ impl Node {
                                 // If anything fails here, exclude the node
                                 .unwrap_or(true)
                     } else {
+                        // If there is no longer a filter, then we simply retain the node
                         return true;
                     };
 
-                    if is_filtered_out {
+                    // Directories are filtered out based on their children when using relative path
+                    if is_filtered_out && (!path_filter.is_using_relative_path || !is_dir_with_children) {
+                        // Exclude filtered out nodes (files, empty dirs, and mismatched dirs when using an absolute path)
                         return false;
                     }
 
-                    let raw_filter = if path != Path::new(".") {
-                        path_filter
-                            .iter()
-                            .next()
-                            .and_then(|next_part| path_filter.strip_prefix(next_part).ok())
+                    let possibly_empty_filter = if path != Path::new(".") {
+                        if is_filtered_out {
+                            // This is only reachable when using relative paths, the current node is a dir, and it didn't pass the check.
+                            // In this case, we reset the path filter back to its original state and check children of the current node.
+                            path_filter.restore()
+                        } else {
+                            // In all other cases, we advance the current path filter component by 1
+                            path_filter.advance()
+                        }
                     } else {
                         // Pass the filter as is
-                        Some(path_filter)
+                        path_filter.clone()
                     };
 
-                    raw_filter.filter(|new_filter| !new_filter.as_os_str().is_empty())
+                    let filter = (!possibly_empty_filter
+                        .get_current_component()
+                        .map(|component| component.as_os_str().is_empty())
+                        .unwrap_or(true))
+                    .then_some(possibly_empty_filter);
+
+                    if filter.is_none() && !is_filtered_out {
+                        // This is only reachable if the current node matched the last component in the filter.
+                        // In this case, we simply inclue the node and don't do any further child filtering (as their parent passed the check).
+                        return true;
+                    }
+
+                    filter
                 } else {
                     None
                 };
@@ -262,9 +321,16 @@ impl Node {
                         return false;
                     };
 
-                    // Directories are filtered based on their children
-                    if !child.node.is_dir() && !regex.is_match(path) {
-                        return false;
+                    if regex.is_match(path) {
+                        // Include both directories and files if they satisfy the RegExp.
+                        // We don't check children of directories in this case.
+                        return true;
+                    } else {
+                        // If it's a dir with children, then we also check the children.
+                        // Otherwise (if it's a file or an empty dir), we exclude the node immediately.
+                        if !is_dir_with_children {
+                            return false;
+                        }
                     }
                 }
 

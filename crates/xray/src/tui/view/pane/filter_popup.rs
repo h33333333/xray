@@ -2,8 +2,8 @@ use std::borrow::Cow;
 use std::path::Path;
 
 use ratatui::layout::Constraint;
-use ratatui::style::{Color, Stylize};
-use ratatui::text::{Line, Text};
+use ratatui::style::{Color, Style, Stylize};
+use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, BorderType, Padding, Paragraph, Wrap};
 use regex::Regex;
 
@@ -43,7 +43,7 @@ impl FilterPopup {
             .border_type(BorderType::Thick)
             .padding(POPUP_PADDING)
             .title(Line::from(self.title()).centered())
-            .title_bottom(Line::from(self.keybindings()).centered().fg(Color::Gray));
+            .title_bottom(Line::from(self.keybindings()).centered());
 
         let text = match self.active_input {
             FilterInput::PathFilter => Text::from(self.path_filter.as_str()),
@@ -91,13 +91,21 @@ impl FilterPopup {
     pub fn filters(&self) -> TreeFilter<'_, '_> {
         let mut filter = TreeFilter::default().with_size_filter(self.size_filter_in_units());
 
-        if let Some(regex) = self.path_regex() {
-            filter = filter.with_regex(regex);
-        } else {
-            filter = filter.with_path_filter(Path::new(&self.path_filter));
+        match self.path_filter_kind {
+            PathFilterKind::Regular => filter = filter.with_path_filter(Path::new(&self.path_filter)),
+            PathFilterKind::Regexp => {
+                if let Some(regex) = self.path_regex() {
+                    filter = filter.with_regex(regex);
+                }
+            }
         }
 
         filter
+    }
+
+    pub fn reset(&mut self) {
+        self.path_filter.clear();
+        self.node_size_filter = 0;
     }
 
     fn size_filter_in_units(&self) -> u64 {
@@ -118,11 +126,37 @@ impl FilterPopup {
         }
     }
 
-    fn keybindings(&self) -> &'static str {
-        // FIXME: this is ugly
+    fn keybindings(&self) -> Vec<Span> {
+        let mut keybindings = vec![
+            // Padding
+            Span::from("  "),
+        ];
+
+        let mut add_new_keybinding = |seq: &'static str, description: &'static str| {
+            if keybindings.len() > 1 {
+                // Separate keybindings
+                keybindings.push(Span::styled(", ", Style::new().fg(Color::Gray)));
+            }
+
+            // Add the key sequence
+            keybindings.push(Span::styled(seq, Style::new().bold().fg(Color::White)));
+            // Separator
+            keybindings.push(Span::styled(" - ", Style::new().fg(Color::Gray)));
+            // Add the description
+            keybindings.push(Span::styled(description, Style::new().fg(Color::Gray)));
+        };
+
+        add_new_keybinding("[s-]tab", "toggle filter");
         match self.active_input {
-            FilterInput::PathFilter => "  [s-]tab - toggle filter, ctrl-l - toggle filter kind  ",
-            FilterInput::SizeFilter => "  [s-]tab - toggle filter, ctrl-l - toggle size units  ",
+            FilterInput::PathFilter => add_new_keybinding("ctrl-l", "toggle filter kind"),
+            FilterInput::SizeFilter => add_new_keybinding("ctrl-l", "toggle size units"),
         }
+
+        add_new_keybinding("enter", "apply");
+
+        // Padding
+        keybindings.push(Span::from("  "));
+
+        keybindings
     }
 }
