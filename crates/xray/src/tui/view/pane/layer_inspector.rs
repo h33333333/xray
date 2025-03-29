@@ -249,12 +249,17 @@ impl LayerInspectorPane {
             return Ok(());
         }
 
-        let (tree, _) = if let Some((tree, total_nodes)) = self.filtered_changeset.as_ref() {
+        let (tree, total_nodes) = if let Some((tree, total_nodes)) = self.filtered_changeset.as_ref() {
             // Use the filtered changeset if it's present
             (tree, *total_nodes)
         } else {
             state.get_aggregated_layers_changeset()?
         };
+
+        // Ignore the top-level "." node
+        if total_nodes - 1 == 0 {
+            return Ok(());
+        }
 
         let (_, (_, current_node, _, _)) = tree
             .iter()
