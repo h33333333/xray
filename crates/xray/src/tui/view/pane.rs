@@ -212,14 +212,14 @@ impl Pane {
         match self {
             Pane::ImageInfo(ImageInfoPane {
                 active_field,
-                repository,
+                image_name,
                 tag,
                 size,
                 architecture,
                 os,
             }) => Some(match active_field {
-                ImageInfoField::Repository => repository.into(),
-                ImageInfoField::Tag => tag.into(),
+                ImageInfoField::Repository => image_name.as_ref().into(),
+                ImageInfoField::Tag => tag.as_ref().into(),
                 // FIXME: this is kinda ugly, can I do better somehow?
                 ImageInfoField::Size => format!("{}", size).into(),
                 ImageInfoField::Architecture => architecture.into(),

@@ -1,7 +1,11 @@
 //! Contains all the stuff related to parsing JSON blobs.
 
+use std::io::Read;
+
+use anyhow::Context;
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer};
+use serde_query::Deserialize as QueryDeserialize;
 
 use super::Sha256Digest;
 use crate::parser::constants::{SHA256_DIGEST_LENGTH, SHA256_DIGEST_PREFIX};
@@ -9,6 +13,19 @@ use crate::parser::util::sha256_digest_from_hex;
 
 pub(super) type ImageLayerConfigs = Vec<LayerConfig>;
 pub(super) type ImageHistory = Vec<HistoryEntry>;
+
+#[derive(QueryDeserialize)]
+pub(super) struct Manifest {
+    #[query(".[0].RepoTags.[0]")]
+    pub image_name: String,
+}
+
+impl Manifest {
+    pub fn extract_image_name(src: impl Read) -> anyhow::Result<String> {
+        let manifest = serde_json::from_reader::<_, Manifest>(src).context("failed to parse the image's manifest")?;
+        Ok(manifest.image_name)
+    }
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]

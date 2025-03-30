@@ -40,7 +40,7 @@ impl AppState {
     pub fn new(image: Image) -> anyhow::Result<Self> {
         // FIXME: move the pane instantiation somewhere else
         let image_info_pane = Pane::ImageInfo(ImageInfoPane::new(
-            image.repository,
+            image.image_name,
             image.tag,
             image.size,
             image.architecture,

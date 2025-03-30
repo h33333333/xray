@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 use constants::{BLOB_PATH_PREFIX, SHA256_DIGEST_LENGTH, TAR_BLOCK_SIZE, TAR_MAGIC_NUMBER, TAR_MAGIC_NUMBER_START_IDX};
 use indexmap::IndexMap;
-use json::{ImageHistory, ImageLayerConfigs, JsonBlob};
+use json::{ImageHistory, ImageLayerConfigs, JsonBlob, Manifest};
 use serde::de::DeserializeOwned;
 use tar::Archive;
 pub use tree::TreeFilter;
@@ -80,9 +80,9 @@ impl DirectoryState {
 #[derive(Default)]
 pub struct Image {
     /// The repository of the image.
-    pub repository: String,
+    pub image_name: Cow<'static, str>,
     /// The tag of the image.
-    pub tag: String,
+    pub tag: Cow<'static, str>,
     /// The total size of the image in bytes.
     pub size: u64,
     /// The architecture of the image.
@@ -119,8 +119,8 @@ pub struct Parser {
     history: Option<ImageHistory>,
     architecture: Option<String>,
     os: Option<String>,
+    tagged_name: Option<String>,
 }
-
 impl Parser {
     pub fn new() -> Self {
         Parser::default()
@@ -137,6 +137,13 @@ impl Parser {
         let mut tar_header = [0u8; TAR_BLOCK_SIZE];
         while let Some(entry) = entries.next() {
             let mut entry = entry.context("error while reading an entry")?;
+
+            // Parse the image's manifest and extract name and tag
+            if entry.header().path_bytes().as_ref() == b"manifest.json" {
+                self.tagged_name = Some(Manifest::extract_image_name(&mut entry)?);
+                // We are done with this entry
+                continue;
+            }
 
             let header = entry.header();
 
@@ -355,11 +362,19 @@ impl Parser {
             );
         }
 
+        let (image_name, tag) = self
+            .tagged_name
+            .and_then(|mut name| {
+                let tag = name.split_off(name.find(':')? + 1);
+                // Remove ':'
+                name.truncate(name.len() - 1);
+                Some((Cow::Owned(name), Cow::Owned(tag)))
+            })
+            .unwrap_or((Cow::Borrowed("<missing>"), Cow::Borrowed("<missing>")));
+
         Ok(Image {
-            // FIXME: extract from manifest
-            repository: "hello-docker".to_owned(),
-            // FIXME: extract from manifest
-            tag: "latest".to_owned(),
+            image_name,
+            tag,
             size: image_size,
             architecture: self
                 .architecture
