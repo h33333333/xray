@@ -41,8 +41,9 @@ pub enum Pane {
     ImageInfo(ImageInfoPane),
     /// Displays infromation about the [LayerSelectorPane::selected_layer].
     LayerInfo(LayerInfoPane),
-    /// Allows switching between [Layers](Layer) of the [crate::parser::Image].
+    /// Allows switching between [Layers](crate::parser::Layer) of the [crate::parser::Image].
     LayerSelector(LayerSelectorPane),
+    /// Displays the aggregated changeset from the currently selected [Layers](crate::parser::Layer).
     LayerInspector(LayerInspectorPane),
 }
 
@@ -79,6 +80,7 @@ impl Pane {
             Pane::LayerSelector(pane_state) => {
                 let lines = pane_state.lines(state.layers.iter(), field_value_style);
 
+                //  Add vertical and horizontal scrolls
                 widget.set_pane(Paragraph::new(Text::from(lines)).block(block));
             }
             Pane::LayerInfo(pane_state) => {
@@ -99,7 +101,7 @@ impl Pane {
                     },
                 );
 
-                // FIXME: add a horizontal scroll
+                // FIXME: add a vertical scroll
                 widget.set_pane(Paragraph::new(Text::from(lines)).wrap(Wrap { trim: true }).block(block));
             }
             Pane::LayerInspector(pane_state) => {
