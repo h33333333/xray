@@ -41,10 +41,13 @@ impl LayerSelectorPane {
         &self,
         layers: impl IntoIterator<Item = (&'l Sha256Digest, &'l Layer)>,
         field_value_style: Style,
+        visible_rows: u16,
     ) -> Vec<Line<'l>> {
         layers
             .into_iter()
             .enumerate()
+            // Always keep the selected layer visible
+            .skip((self.selected_layer_idx + 1).saturating_sub(Into::<usize>::into(visible_rows)))
             .map(|(idx, (_, layer))| {
                 let (layer_size, unit) = bytes_to_human_readable_units(layer.size);
                 Line::from(vec![

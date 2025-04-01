@@ -57,6 +57,9 @@ impl Pane {
         let field_value_style = FIELD_VALUE_STYLE.fg(text_color);
         let active_field_style = ACTIVE_FIELD_STYLE.fg(text_color);
 
+        // Two rows are taken by the block borders
+        let remaining_rows = pane_rows - 2;
+
         let mut widget = PaneWithPopup::<Paragraph, Paragraph>::new(None, None);
 
         let block = self.get_styled_block(pane_is_active);
@@ -78,9 +81,9 @@ impl Pane {
                 widget.set_pane(Paragraph::new(Text::from(lines)).block(block));
             }
             Pane::LayerSelector(pane_state) => {
-                let lines = pane_state.lines(state.layers.iter(), field_value_style);
+                let lines = pane_state.lines(state.layers.iter(), field_value_style, remaining_rows);
 
-                //  Add vertical and horizontal scrolls
+                //  Add and horizontal scroll
                 widget.set_pane(Paragraph::new(Text::from(lines)).block(block));
             }
             Pane::LayerInfo(pane_state) => {
@@ -109,8 +112,6 @@ impl Pane {
                 let (current_layer_digest, _) = state.get_selected_layer()?;
                 let show_path_filter = pane_is_active && pane_state.is_showing_filter_popup;
 
-                // Two rows are taken by the block borders
-                let remaining_rows = pane_rows - 2;
                 let lines = pane_state
                     .changeset_to_lines(
                         layer_changeset,
