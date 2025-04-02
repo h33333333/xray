@@ -49,7 +49,12 @@ pub enum Pane {
 
 impl Pane {
     /// Returns a [Widget] that can be used to render the current pane in the terminal.
-    pub fn render<'a>(&'a self, state: &'a AppState, pane_rows: u16) -> anyhow::Result<impl Widget + 'a> {
+    pub fn render<'a>(
+        &'a self,
+        state: &'a AppState,
+        pane_rows: u16,
+        pane_cols: u16,
+    ) -> anyhow::Result<impl Widget + 'a> {
         let pane_is_active = state.active_pane == self.into() && !state.show_help_popup;
 
         let text_color = text_color(pane_is_active);
@@ -59,6 +64,8 @@ impl Pane {
 
         // Two rows are taken by the block borders
         let remaining_rows = pane_rows - 2;
+        // Two cols are taken by the block borders
+        let remaining_cols = pane_cols - 2;
 
         let mut widget = PaneWithPopup::<Paragraph, Paragraph>::new(None, None);
 
@@ -81,7 +88,7 @@ impl Pane {
                 widget.set_pane(Paragraph::new(Text::from(lines)).block(block));
             }
             Pane::LayerSelector(pane_state) => {
-                let lines = pane_state.lines(state.layers.iter(), field_value_style, remaining_rows);
+                let lines = pane_state.lines(state.layers.iter(), field_value_style, remaining_rows, remaining_cols);
 
                 //  Add and horizontal scroll
                 widget.set_pane(Paragraph::new(Text::from(lines)).block(block));
@@ -150,7 +157,7 @@ impl Pane {
         Ok(widget)
     }
 
-    /// Moves to the next entry in the specified [Direction] inside the [Pane].
+    /// Moves (vertically) to the next entry in the specified [Direction] inside the [Pane].
     pub fn move_within_pane(&mut self, direction: Direction, state: &AppState) -> anyhow::Result<Option<SideEffect>> {
         match self {
             Pane::ImageInfo(ImageInfoPane { active_field, .. }) => active_field.toggle(direction),
@@ -158,6 +165,7 @@ impl Pane {
                 selected_layer_digest,
                 selected_layer_idx,
                 selected_layers_changeset,
+                ..
             }) => {
                 // FIXME: move this logic somewhere else
                 let current_layer_idx = *selected_layer_idx;
@@ -249,12 +257,17 @@ impl Pane {
     ///
     /// The actual action depends on the currently active [Pane] and its state.
     pub fn interact_within_pane(&mut self, state: &AppState) -> anyhow::Result<()> {
-        // Only the inspector pane supports this action for now.
-        if let Pane::LayerInspector(pane_state) = self {
-            pane_state
-                .toggle_active_node(state)
-                .context("layer inspector: failed to toggle the active node")?;
-        };
+        match self {
+            Pane::LayerInspector(pane_state) => {
+                // Only the inspector pane supports this action for now.
+                pane_state
+                    .toggle_active_node(state)
+                    .context("layer inspector: failed to toggle the active node")?;
+            }
+            // There is nothing to toggle in layer selector, so we use this action to scroll right
+            Pane::LayerSelector(_) => self.scroll_within_pane(Direction::Forward)?,
+            _ => {}
+        }
 
         Ok(())
     }
@@ -300,6 +313,18 @@ impl Pane {
         if let Pane::LayerInspector(pane_state) = self {
             pane_state.pop_from_filter();
         };
+    }
+
+    /// Scroll horizontally within the [Pane].
+    ///
+    /// Vertical scroll is done in [Self::move_within_pane].
+    pub fn scroll_within_pane(&mut self, direction: Direction) -> anyhow::Result<()> {
+        // Only the inspector pane supports this action for now.
+        if let Pane::LayerSelector(pane_state) = self {
+            pane_state.scroll(direction)
+        };
+
+        Ok(())
     }
 
     /// Returns a styled [Block] for the pane.

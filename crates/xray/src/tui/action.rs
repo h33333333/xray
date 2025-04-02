@@ -25,14 +25,14 @@ pub enum AppAction {
     InputDeleteCharacter,
     /// User pasted a string while in the "insert" mode.
     InputPaste(String),
+    /// Scroll horizontally in the specified [ScrollDirection] within the currently selected [super::view::Pane].
+    Scroll(Direction),
 }
 
 #[derive(Debug, Default, Clone, Copy)]
-/// Represents a direction in which the user wants to [AppAction::Move].
+/// Represents a direction in which the user wants to [AppAction::Move] or [AppAction::Scroll].
 pub enum Direction {
     #[default]
-    /// Move to the next entry in a pane.
     Forward,
-    /// Move to the previous entry in a pane.
     Backward,
 }

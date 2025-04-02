@@ -48,10 +48,18 @@ impl AppState {
         ));
 
         let (digest, layer) = image.layers.get_index(0).context("got an image with 0 layers")?;
+
+        let longest_layer_creation_command = image
+            .layers
+            .iter()
+            .map(|(_, layer)| layer.created_by.len())
+            .max()
+            .context("got an image with 0 layers")?;
         let layer_selector_pane = Pane::LayerSelector(LayerSelectorPane::new(
             *digest,
             0,
             layer.changeset.clone().unwrap_or(LayerChangeSet::new(*digest)),
+            longest_layer_creation_command,
         ));
         let layer_info_pane = Pane::LayerInfo(LayerInfoPane::default());
         let layer_inspector_pane = Pane::LayerInspector(LayerInspectorPane::default());
@@ -215,6 +223,7 @@ impl Store for AppState {
             AppAction::InputDeleteCharacter => {
                 self.get_active_pane_mut()?.on_backspace();
             }
+            AppAction::Scroll(direction) => self.get_active_pane_mut()?.scroll_within_pane(direction)?,
             // Do nothing in cases when the help popup is active and the user tries to do something besides closing the popup.
             _ => {}
         };

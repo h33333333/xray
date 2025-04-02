@@ -87,6 +87,10 @@ pub fn run(mut dispatcher: AppDispatcher) -> anyhow::Result<()> {
             Event::Key(event) if event.code == KeyCode::BackTab => {
                 dispatcher.dispatch(AppAction::TogglePane(Direction::Backward))?;
             }
+            // Scroll left
+            Event::Key(event) if event.code == KeyCode::Char('h') || event.code == KeyCode::Left => {
+                dispatcher.dispatch(AppAction::Scroll(Direction::Backward))?;
+            }
             // Move down
             Event::Key(event) if event.code == KeyCode::Char('j') || event.code == KeyCode::Down => {
                 dispatcher.dispatch(AppAction::Move(Direction::Forward))?;
@@ -95,13 +99,18 @@ pub fn run(mut dispatcher: AppDispatcher) -> anyhow::Result<()> {
             Event::Key(event) if event.code == KeyCode::Char('k') || event.code == KeyCode::Up => {
                 dispatcher.dispatch(AppAction::Move(Direction::Backward))?;
             }
+            // Scroll right OR interact within the current pane.
+            //
+            // NOTE: the action is converted from `AppAction::Interact` to `AppAction::Scroll` inside the handler depending on the currently active pane.
+            Event::Key(event)
+                if event.code == KeyCode::Enter || event.code == KeyCode::Char('l') || event.code == KeyCode::Right =>
+            {
+                dispatcher.dispatch(AppAction::Interact)?;
+            }
+
             // Copy the selected item to clipboard
             Event::Key(event) if event.code == KeyCode::Char('y') => {
                 dispatcher.dispatch(AppAction::Copy)?;
-            }
-            // Interact within current pane
-            Event::Key(event) if event.code == KeyCode::Enter || event.code == KeyCode::Char('l') => {
-                dispatcher.dispatch(AppAction::Interact)?;
             }
             // Toggle help
             Event::Key(event) if event.code == KeyCode::Char('/') => {
