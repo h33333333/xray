@@ -9,8 +9,6 @@ use crate::tui::util::bytes_to_human_readable_units;
 const LAYER_STATUS_INDICATOR_LEN: usize = 2;
 /// Length of the fixed part (i.e. without the command that created the layer)
 const LAYER_INFO_FIXED_LEN: usize = 10;
-const MORE_DATA_TO_RIGHT_INDICATOR: &str = " → ";
-const MORE_DATA_TO_LEFT_INDICATOR: &str = " ← ";
 
 #[derive(Debug)]
 /// [Pane::LayerSelector] pane's state.
@@ -62,7 +60,7 @@ impl LayerSelectorPane {
         visible_rows: u16,
         visible_cols: u16,
     ) -> Vec<Line<'l>> {
-        // How many columns are left for the command that created the layer
+        // How many columns are left to display the command that created the layer
         let cols_for_created_by = Into::<usize>::into(visible_cols) - LAYER_INFO_FIXED_LEN - LAYER_STATUS_INDICATOR_LEN;
 
         layers
@@ -73,32 +71,39 @@ impl LayerSelectorPane {
             .map(|(idx, (_, layer))| {
                 let (layer_size, unit) = bytes_to_human_readable_units(layer.size);
                 let created_by = if layer.created_by.len() > cols_for_created_by {
-                    if self.scroll_offset != 0 {
-                        layer
-                            .created_by
-                            .get(self.scroll_offset..self.scroll_offset + cols_for_created_by)
-                            .unwrap_or(layer.created_by.get(self.scroll_offset).unwrap())
+                    let (start, end) = if self.scroll_offset + cols_for_created_by > layer.created_by.len() {
+                        // HACK: this check is needed because currently the scroll offset is updated up until the last character disappears from the screen.
+                        // Without this, a user may not see any change in the pane when scrolling left/right, as logic in the `if` branch will simply
+                        // cap the max scroll offset so that the command always fills the viewport, even though the actual offset will still change.
+                        //
+                        // So, to improve the user experience a bit (and avoid confusion), we allow scrolling the longest layer until it disappears from the screen.
+                        //
+                        // To fix this properly, I need to find a way of passing `cols_for_created_by` to `Self::scroll`, but I didn't manage to do so yet.
+                        let diff = if layer.created_by.len() != self.longest_layer_creation_command {
+                            // FIXME: scroll offset should be capped inside `Self::scroll`
+                            self.scroll_offset + cols_for_created_by - layer.created_by.len()
+                        } else {
+                            0
+                        };
+                        (self.scroll_offset - diff, layer.created_by.len())
                     } else {
-                        &layer.created_by[..cols_for_created_by]
-                    }
+                        (self.scroll_offset, self.scroll_offset + cols_for_created_by)
+                    };
+                    &layer.created_by[start..end]
                 } else {
                     layer.created_by.as_ref()
                 };
 
-                let mut spans = vec![
+                Line::from(vec![
                     // A colored block that acts as an indicator of the currently selected layer.
                     // It's also used to display the layers that are currently used to show aggregated changes.
                     Span::styled("  ", layer_status_indicator_style(idx, &self.selected_layer_idx)),
                     // Render per-layer information
                     Span::styled(
-                        format!(" {:>5.1} {:<2} ", layer_size, unit.human_readable()),
+                        format!(" {:>5.1} {:<2} {}", layer_size, unit.human_readable(), created_by),
                         field_value_style,
                     ),
-                ];
-                // Add the layer creation command
-                spans.push(Span::styled(created_by, field_value_style));
-
-                Line::from(spans)
+                ])
             })
             .collect::<Vec<_>>()
     }

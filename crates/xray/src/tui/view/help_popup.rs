@@ -23,7 +23,7 @@ impl HelpPopup {
             .title(Line::from("  Help  ").centered());
 
         let mut hotkeys = get_common_hotkeys();
-        hotkeys.extend(get_hotkeys_for_active_pane(state.active_pane));
+        get_hotkeys_for_active_pane(&mut hotkeys, state.active_pane);
         // Make sure that the keys are sorted in the descending hotkey length order
         hotkeys.sort_by(|(hk_a, _), (hk_b, _)| hk_b.len().cmp(&hk_a.len()));
 
@@ -61,8 +61,7 @@ fn get_common_hotkeys() -> Vec<(&'static str, &'static str)> {
     ]
 }
 
-fn get_hotkeys_for_active_pane(active_pane: ActivePane) -> Vec<(&'static str, &'static str)> {
-    let mut hotkeys = Vec::new();
+fn get_hotkeys_for_active_pane(hotkeys: &mut Vec<(&'static str, &'static str)>, active_pane: ActivePane) {
     match active_pane {
         ActivePane::ImageInfo | ActivePane::LayerInfo => {
             hotkeys.push(("y", "Copy the selected value to the clipboard"))
@@ -71,7 +70,9 @@ fn get_hotkeys_for_active_pane(active_pane: ActivePane) -> Vec<(&'static str, &'
             hotkeys.push(("enter, l", "Toggle the selected directory"));
             hotkeys.push(("ctrl-f", "Show the filter popup"))
         }
-        _ => (),
+        ActivePane::LayerSelector => {
+            hotkeys.push(("left, h", "Scroll left"));
+            hotkeys.push(("right, l", "Scroll right"));
+        }
     }
-    hotkeys
 }
