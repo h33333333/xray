@@ -1,6 +1,7 @@
 use action::Direction;
 use anyhow::Context;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::terminal::size;
 use dispatcher::Dispatcher;
 use store::AppState;
 use view::App;
@@ -23,8 +24,9 @@ pub fn init_app_dispatcher(image: Image) -> anyhow::Result<AppDispatcher> {
 }
 
 pub fn run(mut dispatcher: AppDispatcher) -> anyhow::Result<()> {
+    let size = size().context("failed to get the terminal's size")?;
     // Do the initial render of the interface
-    dispatcher.dispatch(AppAction::Empty)?;
+    dispatcher.dispatch(AppAction::Empty(size))?;
 
     loop {
         let event = event::read()?;
@@ -32,7 +34,7 @@ pub fn run(mut dispatcher: AppDispatcher) -> anyhow::Result<()> {
 
         match event {
             // Re-render the interface when terminal window is resized
-            Event::Resize(_, _) => dispatcher.dispatch(AppAction::Empty)?,
+            Event::Resize(h, v) => dispatcher.dispatch(AppAction::Empty((h, v)))?,
             // If we are in the insert mode, we ignore all hotkeys except 'Enter' and 'CTRL-C'
             Event::Key(event) if store.is_in_insert_mode => {
                 if event.code == KeyCode::Enter

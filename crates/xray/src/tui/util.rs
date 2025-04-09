@@ -3,8 +3,12 @@
 use std::fmt::Write as _;
 
 use arboard::Clipboard;
+use ratatui::layout::{Constraint, Layout, Rect};
 
 use crate::render_order_enum;
+
+type CommandBarArea = Rect;
+type PaneAreas = [Rect; 4];
 
 /// Represents the unit of a value.
 render_order_enum!(Unit, Bytes, Kilobytes, Megabytes, Gigabytes);
@@ -59,4 +63,16 @@ pub(crate) fn copy_to_clipboard(clipboard: Option<&mut Clipboard>, data: std::bo
             tracing::debug!("Failed to copy text to the clipboard: {}", e);
         };
     }
+}
+
+/// Splits the passed [Rect] into two equal columns, also splitting the first column into three vertical sections.
+///
+/// Returns an array that contains upper left, middle left, lower left, and right [Rect].
+pub(crate) fn split_layout(initial_area: Rect) -> (PaneAreas, CommandBarArea) {
+    let [main, command_bar] = Layout::vertical([Constraint::Percentage(100), Constraint::Min(1)]).areas(initial_area);
+    let [left, right] = Layout::horizontal([Constraint::Percentage(35), Constraint::Percentage(70)]).areas(main);
+    let [upper_left, middle_left, lower_left] =
+        Layout::vertical([Constraint::Min(8), Constraint::Min(10), Constraint::Percentage(100)]).areas(left);
+
+    ([upper_left, middle_left, lower_left, right], command_bar)
 }

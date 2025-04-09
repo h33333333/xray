@@ -20,9 +20,6 @@ pub use side_effect::SideEffect;
 
 use super::store::{AppState, Store};
 
-type CommandBarArea = Rect;
-type PaneAreas = [Rect; 4];
-
 /// A Flux view that works with a specific [Store].
 pub trait View<S: Store> {
     /// Updates [View] according to the latest changes in the [Store].
@@ -85,29 +82,21 @@ impl View<AppState> for App {
 /// This function also renders the command bar below the main panes and
 /// the help popup if it's currently visible.
 fn render(frame: &mut Frame, state: &AppState) -> anyhow::Result<()> {
-    let (pane_areas, command_bar) = split_layout(frame.area());
-
-    debug_assert_eq!(
-        pane_areas.len(),
-        state.panes.len(),
-        "Each pane should have a corresponding rect that it will be rendered in"
-    );
-
     // Panes are always sorted by the render order, so we can just zip rects and panes here,
     // as the order won't change during runtime.
-    for (pane_area, pane) in pane_areas.into_iter().zip(state.panes.iter()) {
+    for (pane, pane_area) in state.panes.iter() {
         frame.render_widget(
             pane.as_ref()
                 .context("bug: pane wasn't returned back after an operation")?
                 .render(state, pane_area.height, pane_area.width)
                 .context("failed to render a frame")?,
-            pane_area,
+            *pane_area,
         );
     }
 
     frame.render_widget(
         CommandBar::render(state).context("failed to redner the command bar")?,
-        command_bar,
+        state.command_bar_area,
     );
 
     if state.show_help_popup {
@@ -120,18 +109,6 @@ fn render(frame: &mut Frame, state: &AppState) -> anyhow::Result<()> {
     }
 
     Ok(())
-}
-
-/// Splits the passed [Rect] into two equal columns, also splitting the first column into three vertical sections.
-///
-/// Returns an array that contains upper left, middle left, lower left, and right [Rect].
-fn split_layout(initial_area: Rect) -> (PaneAreas, CommandBarArea) {
-    let [main, command_bar] = Layout::vertical([Constraint::Percentage(100), Constraint::Min(1)]).areas(initial_area);
-    let [left, right] = Layout::horizontal([Constraint::Percentage(35), Constraint::Percentage(70)]).areas(main);
-    let [upper_left, middle_left, lower_left] =
-        Layout::vertical([Constraint::Min(8), Constraint::Min(10), Constraint::Percentage(100)]).areas(left);
-
-    ([upper_left, middle_left, lower_left, right], command_bar)
 }
 
 /// Returns a [Rect] that can be used to show a centered popup.

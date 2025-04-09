@@ -2,7 +2,9 @@
 pub enum AppAction {
     /// An empty action that doesn't lead to any change in the app's state.
     /// Can be used to re-render the frame without changing any state.
-    Empty,
+    ///
+    /// Contains the current size of the terminal.
+    Empty((u16, u16)),
     /// Switch the active pane to the next one.
     TogglePane(Direction),
     /// Move in the specified [Direction] within the currently selected [super::view::Pane].

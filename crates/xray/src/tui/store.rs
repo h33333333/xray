@@ -1,11 +1,13 @@
 use anyhow::Context;
 use arboard::Clipboard;
 use indexmap::IndexMap;
+use ratatui::layout::Rect;
 
 use super::action::AppAction;
 use super::util::copy_to_clipboard;
 use super::view::{ActivePane, ImageInfoPane, LayerInfoPane, LayerInspectorPane, LayerSelectorPane, Pane, SideEffect};
 use crate::parser::{Image, Layer, LayerChangeSet, Sha256Digest};
+use crate::tui::util::split_layout;
 
 /// A Flux store that can handle a [Store::Action].
 pub trait Store {
@@ -17,10 +19,12 @@ pub trait Store {
 }
 
 pub struct AppState {
-    /// All the [Panes](Pane) sorted by their render order.
+    /// All the [Panes](Pane) with their corresponding [rendering areas](Rect) sorted by their render order.
     ///
     /// Check docs of [ActivePane] to understand how panes are ordered.
-    pub panes: [Option<Pane>; 4],
+    pub panes: [(Option<Pane>, Rect); 4],
+    /// A [place](Rect) to render the command bar.
+    pub command_bar_area: Rect,
     /// The currently selected pane.
     pub active_pane: ActivePane,
     /// A [Clipboard] that is used for handling of [AppAction::Copy].
@@ -66,20 +70,23 @@ impl AppState {
 
         let clipboard = Clipboard::new().ok();
 
+        // Note that we assign zeroed rects here. This means that we won't be able to render anything before dispatching at least one
+        // [AppAction::Empty] event with the correct terminal size.
         let mut panes = [
-            Some(image_info_pane),
-            Some(layer_info_pane),
-            Some(layer_selector_pane),
-            Some(layer_inspector_pane),
+            (Some(image_info_pane), Rect::ZERO),
+            (Some(layer_info_pane), Rect::ZERO),
+            (Some(layer_selector_pane), Rect::ZERO),
+            (Some(layer_inspector_pane), Rect::ZERO),
         ];
 
         // Ensure that panes are always sorted by the render order, determined
         // by the order of enum's variants declaration.
-        panes.sort_by_key(|a| Into::<usize>::into(Into::<ActivePane>::into(a.as_ref().unwrap())));
+        panes.sort_by_key(|(a, _)| Into::<usize>::into(Into::<ActivePane>::into(a.as_ref().unwrap())));
 
         Ok(AppState {
             panes,
             active_pane: ActivePane::default(),
+            command_bar_area: Rect::ZERO,
             clipboard,
             layers: image.layers,
             show_help_popup: false,
@@ -90,7 +97,7 @@ impl AppState {
     /// Returns a reference to the currently selected [Layer] and its [Sha256Digest].
     pub fn get_selected_layer(&self) -> anyhow::Result<(&Sha256Digest, &Layer)> {
         let layer_selector_pane_idx: usize = ActivePane::LayerSelector.into();
-        let layer_selector_pane = &self.panes[layer_selector_pane_idx];
+        let (layer_selector_pane, _) = &self.panes[layer_selector_pane_idx];
         let selected_layer_idx = if let Some(Pane::LayerSelector(pane)) = layer_selector_pane {
             pane.selected_layer().1
         } else {
@@ -103,7 +110,7 @@ impl AppState {
     /// Returns a reference to the aggregated [LayerChangeSet] of the currently selected layer and its parents.
     pub fn get_aggregated_layers_changeset(&self) -> anyhow::Result<(&LayerChangeSet, usize)> {
         let layer_selector_pane_idx: usize = ActivePane::LayerSelector.into();
-        let layer_selector_pane = &self.panes[layer_selector_pane_idx];
+        let (layer_selector_pane, _) = &self.panes[layer_selector_pane_idx];
         if let Some(Pane::LayerSelector(pane)) = layer_selector_pane {
             Ok(pane.selected_layers_changeset())
         } else {
@@ -114,20 +121,21 @@ impl AppState {
     fn get_active_pane(&self) -> anyhow::Result<&Pane> {
         self.panes
             .get(Into::<usize>::into(self.active_pane))
-            .and_then(|pane| pane.as_ref())
+            .and_then(|(pane, _)| pane.as_ref())
             .with_context(|| format!("bug: pane {:?} is no longer at its expected place", self.active_pane))
     }
 
     fn get_active_pane_mut(&mut self) -> anyhow::Result<&mut Pane> {
         self.panes
             .get_mut(Into::<usize>::into(self.active_pane))
-            .and_then(|pane| pane.as_mut())
+            .and_then(|(pane, _)| pane.as_mut())
             .with_context(|| format!("bug: pane {:?} is no longer at its expected place", self.active_pane))
     }
 
     fn on_changeset_updated(&mut self) -> anyhow::Result<()> {
         let layer_inspector_pane_idx: usize = ActivePane::LayerInspector.into();
-        let mut layer_inspector_pane = self.panes[layer_inspector_pane_idx].take();
+        let (layer_inspector_pane_opt, _) = &mut self.panes[layer_inspector_pane_idx];
+        let mut layer_inspector_pane = layer_inspector_pane_opt.take();
 
         if let Some(Pane::LayerInspector(pane)) = layer_inspector_pane.as_mut() {
             // Reset state
@@ -141,7 +149,8 @@ impl AppState {
         }
 
         // Return the pane back
-        self.panes[layer_inspector_pane_idx].replace(layer_inspector_pane.expect("unreacheable"));
+        let (layer_inspector_pane_opt, _) = &mut self.panes[layer_inspector_pane_idx];
+        layer_inspector_pane_opt.replace(layer_inspector_pane.expect("unreacheable"));
 
         Ok(())
     }
@@ -160,12 +169,31 @@ impl Store for AppState {
 
     fn handle(&mut self, action: Self::Action) -> anyhow::Result<()> {
         match action {
-            AppAction::Empty => tracing::trace!("Received an empty event"),
+            AppAction::Empty((width, height)) => {
+                tracing::trace!("Received an empty event");
+
+                let (pane_areas, command_bar) = split_layout(Rect::new(0, 0, width, height));
+
+                debug_assert_eq!(
+                    pane_areas.len(),
+                    self.panes.len(),
+                    "Each pane should have a corresponding rect that it will be rendered in"
+                );
+
+                // Update the area oof each pane
+                pane_areas
+                    .into_iter()
+                    .zip(self.panes.iter_mut())
+                    .for_each(|(new_area, (_, old_area))| *old_area = new_area);
+                // Update the command bar's area
+                self.command_bar_area = command_bar;
+            }
             AppAction::TogglePane(direction) if !self.show_help_popup => self.active_pane.toggle(direction),
-            action @ (AppAction::Interact | AppAction::Move(..)) if !self.show_help_popup => {
+            action @ (AppAction::Interact | AppAction::Move(..) | AppAction::Scroll(..)) if !self.show_help_popup => {
                 let active_pane_idx = Into::<usize>::into(self.active_pane);
                 // HACK: take the pane here in order to be able to provide a reference to the state when handling the action.
-                let mut active_pane = self.panes[active_pane_idx]
+                let (active_pane, _) = &mut self.panes[active_pane_idx];
+                let mut active_pane = active_pane
                     .take()
                     .with_context(|| format!("bug: forgot to return the {} pane?", active_pane_idx))?;
                 let side_effect: Option<SideEffect> = match action {
@@ -178,10 +206,17 @@ impl Store for AppState {
                     AppAction::Move(direction) => active_pane
                         .move_within_pane(direction, self)
                         .context("error while handling the 'move' action")?,
+                    AppAction::Scroll(direction) => {
+                        active_pane
+                            .scroll_within_pane(direction, self)
+                            .context("error while handling the 'scroll' action")?;
+                        None
+                    }
                     _ => unreachable!("Checked above"),
                 };
                 // Return the pane back
-                self.panes[active_pane_idx].replace(active_pane);
+                let (active_pane_opt, _) = &mut self.panes[active_pane_idx];
+                active_pane_opt.replace(active_pane);
 
                 // Apply a side effect if any
                 if let Some(side_effect) = side_effect {
@@ -223,7 +258,6 @@ impl Store for AppState {
             AppAction::InputDeleteCharacter => {
                 self.get_active_pane_mut()?.on_backspace();
             }
-            AppAction::Scroll(direction) => self.get_active_pane_mut()?.scroll_within_pane(direction)?,
             // Do nothing in cases when the help popup is active and the user tries to do something besides closing the popup.
             _ => {}
         };

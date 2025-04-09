@@ -90,7 +90,6 @@ impl Pane {
             Pane::LayerSelector(pane_state) => {
                 let lines = pane_state.lines(state.layers.iter(), field_value_style, remaining_rows, remaining_cols);
 
-                //  Add and horizontal scroll
                 widget.set_pane(Paragraph::new(Text::from(lines)).block(block));
             }
             Pane::LayerInfo(pane_state) => {
@@ -112,6 +111,7 @@ impl Pane {
                 );
 
                 // FIXME: add a vertical scroll
+                // - this requires doing wrap manually, as there is no way to know how many lines will the wrapped text take
                 widget.set_pane(Paragraph::new(Text::from(lines)).wrap(Wrap { trim: true }).block(block));
             }
             Pane::LayerInspector(pane_state) => {
@@ -264,8 +264,9 @@ impl Pane {
                     .toggle_active_node(state)
                     .context("layer inspector: failed to toggle the active node")?;
             }
+            // TODO: isn't this bad? Can't I just do interaction on space or CTRL-l and use l for scrolling?
             // There is nothing to toggle in layer selector, so we use this action to scroll right
-            Pane::LayerSelector(_) => self.scroll_within_pane(Direction::Forward)?,
+            Pane::LayerSelector(_) => self.scroll_within_pane(Direction::Forward, state)?,
             _ => {}
         }
 
@@ -318,10 +319,16 @@ impl Pane {
     /// Scroll horizontally within the [Pane].
     ///
     /// Vertical scroll is done in [Self::move_within_pane].
-    pub fn scroll_within_pane(&mut self, direction: Direction) -> anyhow::Result<()> {
+    pub fn scroll_within_pane(&mut self, direction: Direction, state: &AppState) -> anyhow::Result<()> {
+        let pane_area = state
+            .panes
+            .get(Into::<usize>::into(Into::<ActivePane>::into(&*self)))
+            .map(|(_, rect)| (rect.width, rect.height))
+            .context("bug: ghost pane?")?;
+
         // Only the inspector pane supports this action for now.
         if let Pane::LayerSelector(pane_state) = self {
-            pane_state.scroll(direction)
+            pane_state.scroll(direction, pane_area)
         };
 
         Ok(())

@@ -71,21 +71,8 @@ impl LayerSelectorPane {
             .map(|(idx, (_, layer))| {
                 let (layer_size, unit) = bytes_to_human_readable_units(layer.size);
                 let created_by = if layer.created_by.len() > cols_for_created_by {
-                    let (start, end) = if self.scroll_offset + cols_for_created_by > layer.created_by.len() {
-                        // HACK: this check is needed because currently the scroll offset is updated up until the last character disappears from the screen.
-                        // Without this, a user may not see any change in the pane when scrolling left/right, as logic in the `if` branch will simply
-                        // cap the max scroll offset so that the command always fills the viewport, even though the actual offset will still change.
-                        //
-                        // So, to improve the user experience a bit (and avoid confusion), we allow scrolling the longest layer until it disappears from the screen.
-                        //
-                        // To fix this properly, I need to find a way of passing `cols_for_created_by` to `Self::scroll`, but I didn't manage to do so yet.
-                        let diff = if layer.created_by.len() != self.longest_layer_creation_command {
-                            // FIXME: scroll offset should be capped inside `Self::scroll`
-                            self.scroll_offset + cols_for_created_by - layer.created_by.len()
-                        } else {
-                            0
-                        };
-                        (self.scroll_offset - diff, layer.created_by.len())
+                    let (start, end) = if self.scroll_offset + cols_for_created_by >= layer.created_by.len() {
+                        (layer.created_by.len() - cols_for_created_by, layer.created_by.len())
                     } else {
                         (self.scroll_offset, self.scroll_offset + cols_for_created_by)
                     };
@@ -108,9 +95,18 @@ impl LayerSelectorPane {
             .collect::<Vec<_>>()
     }
 
-    pub fn scroll(&mut self, direction: Direction) {
+    pub fn scroll(&mut self, direction: Direction, pane_area: (u16, u16)) {
+        // How many columns are left to display the command that created the layer
+        let cols_for_created_by = Into::<usize>::into(pane_area.0) - LAYER_INFO_FIXED_LEN - LAYER_STATUS_INDICATOR_LEN - 2 /* borders */;
+
+        let cap = if self.longest_layer_creation_command > cols_for_created_by {
+            self.longest_layer_creation_command - cols_for_created_by + 1 /* show the last character */
+        } else {
+            1
+        };
+
         self.scroll_offset = match direction {
-            Direction::Forward => (self.scroll_offset + 1) % self.longest_layer_creation_command,
+            Direction::Forward => (self.scroll_offset + 1) % cap,
             Direction::Backward => self.scroll_offset.saturating_sub(1),
         };
     }
