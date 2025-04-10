@@ -257,17 +257,11 @@ impl Pane {
     ///
     /// The actual action depends on the currently active [Pane] and its state.
     pub fn interact_within_pane(&mut self, state: &AppState) -> anyhow::Result<()> {
-        match self {
-            Pane::LayerInspector(pane_state) => {
-                // Only the inspector pane supports this action for now.
-                pane_state
-                    .toggle_active_node(state)
-                    .context("layer inspector: failed to toggle the active node")?;
-            }
-            // TODO: isn't this bad? Can't I just do interaction on space or CTRL-l and use l for scrolling?
-            // There is nothing to toggle in layer selector, so we use this action to scroll right
-            Pane::LayerSelector(_) => self.scroll_within_pane(Direction::Forward, state)?,
-            _ => {}
+        if let Pane::LayerInspector(pane_state) = self {
+            // Only the inspector pane supports this action for now.
+            pane_state
+                .toggle_active_node(state)
+                .context("layer inspector: failed to toggle the active node")?;
         }
 
         Ok(())

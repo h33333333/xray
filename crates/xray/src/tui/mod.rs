@@ -101,12 +101,12 @@ pub fn run(mut dispatcher: AppDispatcher) -> anyhow::Result<()> {
             Event::Key(event) if event.code == KeyCode::Char('k') || event.code == KeyCode::Up => {
                 dispatcher.dispatch(AppAction::Move(Direction::Backward))?;
             }
-            // Scroll right OR interact within the current pane.
-            //
-            // NOTE: the action is converted from `AppAction::Interact` to `AppAction::Scroll` inside the handler depending on the currently active pane.
-            Event::Key(event)
-                if event.code == KeyCode::Enter || event.code == KeyCode::Char('l') || event.code == KeyCode::Right =>
-            {
+            // Scroll right
+            Event::Key(event) if event.code == KeyCode::Char('l') || event.code == KeyCode::Right => {
+                dispatcher.dispatch(AppAction::Scroll(Direction::Forward))?;
+            }
+            // Interact within the current pane.
+            Event::Key(event) if event.code == KeyCode::Enter || event.code == KeyCode::Char(' ') => {
                 dispatcher.dispatch(AppAction::Interact)?;
             }
 
