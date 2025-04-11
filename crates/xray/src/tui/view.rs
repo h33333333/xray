@@ -12,7 +12,7 @@ pub use active_pane::ActivePane;
 use anyhow::Context;
 use command_bar::CommandBar;
 use help_popup::HelpPopup;
-pub use pane::{ImageInfoPane, LayerInfoPane, LayerInspectorPane, LayerSelectorPane, Pane};
+pub use pane::{init_panes, Pane};
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::widgets::Clear;
 use ratatui::{DefaultTerminal, Frame};

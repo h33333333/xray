@@ -5,7 +5,7 @@ use ratatui::layout::Rect;
 
 use super::action::AppAction;
 use super::util::copy_to_clipboard;
-use super::view::{ActivePane, ImageInfoPane, LayerInfoPane, LayerInspectorPane, LayerSelectorPane, Pane, SideEffect};
+use super::view::{init_panes, ActivePane, Pane, SideEffect};
 use crate::parser::{Image, Layer, LayerChangeSet, Sha256Digest};
 use crate::tui::util::split_layout;
 
@@ -41,47 +41,9 @@ pub struct AppState {
 
 impl AppState {
     /// Creates a new instance of the [AppState] using data from the provided [Image].
-    pub fn new(image: Image) -> anyhow::Result<Self> {
-        // FIXME: move the pane instantiation somewhere else
-        let image_info_pane = Pane::ImageInfo(ImageInfoPane::new(
-            image.image_name,
-            image.tag,
-            image.size,
-            image.architecture,
-            image.os,
-        ));
-
-        let (digest, layer) = image.layers.get_index(0).context("got an image with 0 layers")?;
-
-        let longest_layer_creation_command = image
-            .layers
-            .iter()
-            .map(|(_, layer)| layer.created_by.len())
-            .max()
-            .context("got an image with 0 layers")?;
-        let layer_selector_pane = Pane::LayerSelector(LayerSelectorPane::new(
-            *digest,
-            0,
-            layer.changeset.clone().unwrap_or(LayerChangeSet::new(*digest)),
-            longest_layer_creation_command,
-        ));
-        let layer_info_pane = Pane::LayerInfo(LayerInfoPane::default());
-        let layer_inspector_pane = Pane::LayerInspector(LayerInspectorPane::default());
-
+    pub fn new(mut image: Image) -> anyhow::Result<Self> {
+        let panes = init_panes(&mut image).context("failed to init panes")?;
         let clipboard = Clipboard::new().ok();
-
-        // Note that we assign zeroed rects here. This means that we won't be able to render anything before dispatching at least one
-        // [AppAction::Empty] event with the correct terminal size.
-        let mut panes = [
-            (Some(image_info_pane), Rect::ZERO),
-            (Some(layer_info_pane), Rect::ZERO),
-            (Some(layer_selector_pane), Rect::ZERO),
-            (Some(layer_inspector_pane), Rect::ZERO),
-        ];
-
-        // Ensure that panes are always sorted by the render order, determined
-        // by the order of enum's variants declaration.
-        panes.sort_by_key(|(a, _)| Into::<usize>::into(Into::<ActivePane>::into(a.as_ref().unwrap())));
 
         Ok(AppState {
             panes,
@@ -107,6 +69,7 @@ impl AppState {
             .get_index(selected_layer_idx)
             .context("selected layer has an invalid index")
     }
+
     /// Returns a reference to the aggregated [LayerChangeSet] of the currently selected layer and its parents.
     pub fn get_aggregated_layers_changeset(&self) -> anyhow::Result<(&LayerChangeSet, usize)> {
         let layer_selector_pane_idx: usize = ActivePane::LayerSelector.into();

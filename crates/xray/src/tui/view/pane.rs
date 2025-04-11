@@ -15,6 +15,7 @@ use layer_info::LayerInfoField;
 pub use layer_info::LayerInfoPane;
 pub use layer_inspector::LayerInspectorPane;
 pub use layer_selector::LayerSelectorPane;
+use ratatui::layout::Rect;
 use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::block::Title;
@@ -28,6 +29,7 @@ use util::fields_into_lines;
 
 use super::widgets::PaneWithPopup;
 use super::{ActivePane, SideEffect};
+use crate::parser::{Image, LayerChangeSet};
 use crate::tui::action::Direction;
 use crate::tui::store::AppState;
 use crate::tui::util::encode_hex;
@@ -360,4 +362,46 @@ impl Pane {
 
         title.into_centered_line()
     }
+}
+
+pub fn init_panes(image: &mut Image) -> anyhow::Result<[(Option<Pane>, Rect); 4]> {
+    let image_info_pane = Pane::ImageInfo(ImageInfoPane::new(
+        std::mem::take(&mut image.image_name),
+        std::mem::take(&mut image.tag),
+        std::mem::take(&mut image.size),
+        std::mem::take(&mut image.architecture),
+        std::mem::take(&mut image.os),
+    ));
+
+    let longest_layer_creation_command = image
+        .layers
+        .iter()
+        .map(|(_, layer)| layer.created_by.len())
+        .max()
+        .context("got an image with 0 layers")?;
+
+    let (digest, layer) = image.layers.get_index(0).context("got an image with 0 layers")?;
+    let layer_selector_pane = Pane::LayerSelector(LayerSelectorPane::new(
+        *digest,
+        0,
+        layer.changeset.clone().unwrap_or(LayerChangeSet::new(*digest)),
+        longest_layer_creation_command,
+    ));
+    let layer_info_pane = Pane::LayerInfo(LayerInfoPane::default());
+    let layer_inspector_pane = Pane::LayerInspector(LayerInspectorPane::default());
+
+    // Note that we assign zeroed rects here. This means that we won't be able to render anything before dispatching at least one
+    // [AppAction::Empty] event with the correct terminal size.
+    let mut panes = [
+        (Some(image_info_pane), Rect::ZERO),
+        (Some(layer_info_pane), Rect::ZERO),
+        (Some(layer_selector_pane), Rect::ZERO),
+        (Some(layer_inspector_pane), Rect::ZERO),
+    ];
+
+    // Ensure that panes are always sorted by the render order, determined
+    // by the order of enum's variants declaration.
+    panes.sort_by_key(|(a, _)| Into::<usize>::into(Into::<ActivePane>::into(a.as_ref().unwrap())));
+
+    Ok(panes)
 }
