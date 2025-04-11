@@ -1,7 +1,8 @@
 use std::borrow::Cow;
 
 use super::util::{Field, FieldKey};
-use crate::tui::util::bytes_to_human_readable_units;
+use crate::tui::action::Direction;
+use crate::tui::util::{bytes_to_human_readable_units, ValueWithStringRepresentation};
 use crate::{render_order_enum, sort_fields_by_render_order};
 
 render_order_enum!(ImageInfoField, Repository, Tag, Size, Architecture, Os);
@@ -25,7 +26,7 @@ pub struct ImageInfoPane {
     pub active_field: ImageInfoField,
     pub image_name: Cow<'static, str>,
     pub tag: Cow<'static, str>,
-    pub size: u64,
+    pub size: ValueWithStringRepresentation<u64>,
     pub architecture: String,
     pub os: String,
 }
@@ -42,14 +43,14 @@ impl ImageInfoPane {
             active_field: ImageInfoField::default(),
             image_name,
             tag,
-            size,
+            size: ValueWithStringRepresentation::new(size),
             architecture,
             os,
         }
     }
 
     pub fn get_fields(&self) -> [Field<'_, ImageInfoField>; 5] {
-        let (image_size, unit) = bytes_to_human_readable_units(self.size);
+        let (image_size, unit) = bytes_to_human_readable_units(*self.size.value());
         let mut fields = [
             (ImageInfoField::Repository, self.image_name.as_ref().into()),
             (ImageInfoField::Tag, self.tag.as_ref().into()),
@@ -64,5 +65,9 @@ impl ImageInfoPane {
         // This is not necessary, but ensures that there is only a single source of truth for the order of fields inside the pane.
         ImageInfoField::sort_fields_by_order(&mut fields);
         fields
+    }
+
+    pub fn toggle_active_field(&mut self, direction: Direction) {
+        self.active_field.toggle(direction);
     }
 }

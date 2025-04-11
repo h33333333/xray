@@ -162,62 +162,17 @@ impl Pane {
     /// Moves (vertically) to the next entry in the specified [Direction] inside the [Pane].
     pub fn move_within_pane(&mut self, direction: Direction, state: &AppState) -> anyhow::Result<Option<SideEffect>> {
         match self {
-            Pane::ImageInfo(ImageInfoPane { active_field, .. }) => active_field.toggle(direction),
-            Pane::LayerSelector(LayerSelectorPane {
-                selected_layer_digest,
-                selected_layer_idx,
-                selected_layers_changeset,
-                ..
-            }) => {
-                // FIXME: move this logic somewhere else
-                let current_layer_idx = *selected_layer_idx;
-
-                if current_layer_idx == state.layers.len() - 1 && matches!(direction, Direction::Forward)
-                    || current_layer_idx == 0 && matches!(direction, Direction::Backward)
-                {
-                    // Don't allow cycling through the layers endlessly
-                    return Ok(None);
-                }
-
-                let next_layer_idx = match direction {
-                    Direction::Forward => (current_layer_idx + 1) % state.layers.len(),
-                    Direction::Backward => (current_layer_idx + state.layers.len() - 1) % state.layers.len(),
-                };
-
-                let (digest, _) = state
-                    .layers
-                    .get_index(next_layer_idx)
-                    .context("unnable to find the next layer")?;
-
-                let all_current_layers = state
-                    .layers
-                    .get_range(..next_layer_idx + 1)
-                    .context("bug: the next layer idx points to an invalid index")?;
-
-                let mut aggregated_layers = all_current_layers
-                    .get_index(0)
-                    .and_then(|(_, layer)| layer.changeset.clone())
-                    .context("not a single layer in the all currently selected layers")?;
-
-                for (_, layer) in all_current_layers.get_range(1..).into_iter().flatten() {
-                    if let Some(changeset) = layer.changeset.as_ref() {
-                        aggregated_layers = aggregated_layers.merge(changeset.clone())
-                    }
-                }
-
-                let aggregated_layers_changeset_size = aggregated_layers.iter().count();
-                *selected_layer_digest = *digest;
-                *selected_layer_idx = next_layer_idx;
-                *selected_layers_changeset = (aggregated_layers, aggregated_layers_changeset_size);
-
-                // We need to reset the layer inspector pane, as its state is now invalid
-                return Ok(Some(SideEffect::ChangesetUpdated));
+            Pane::ImageInfo(pane_state) => {
+                pane_state.toggle_active_field(direction);
+                Ok(None)
             }
-            Pane::LayerInfo(pane_state) => pane_state.active_field.toggle(direction),
-            Pane::LayerInspector(pane_state) => pane_state.move_within_pane(direction, state)?,
-        };
-
-        Ok(None)
+            Pane::LayerSelector(pane_state) => pane_state.move_within_pane(direction, state),
+            Pane::LayerInfo(pane_state) => {
+                pane_state.toggle_active_field(direction);
+                Ok(None)
+            }
+            Pane::LayerInspector(pane_state) => pane_state.move_within_pane(direction, state).map(|_| None),
+        }
     }
 
     /// Returns the currently selected value within a [Pane].
@@ -233,8 +188,7 @@ impl Pane {
             }) => Some(match active_field {
                 ImageInfoField::Repository => image_name.as_ref().into(),
                 ImageInfoField::Tag => tag.as_ref().into(),
-                // FIXME: this is kinda ugly, can I do better somehow?
-                ImageInfoField::Size => format!("{}", size).into(),
+                ImageInfoField::Size => size.string_representation().into(),
                 ImageInfoField::Architecture => architecture.into(),
                 ImageInfoField::Os => os.into(),
             }),

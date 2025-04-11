@@ -1,10 +1,13 @@
+use anyhow::Context as _;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 
 use super::style::layer_status_indicator_style;
 use crate::parser::{Layer, LayerChangeSet, Sha256Digest};
 use crate::tui::action::Direction;
+use crate::tui::store::AppState;
 use crate::tui::util::bytes_to_human_readable_units;
+use crate::tui::view::SideEffect;
 
 const LAYER_STATUS_INDICATOR_LEN: usize = 2;
 /// Length of the fixed part (i.e. without the command that created the layer)
@@ -93,6 +96,50 @@ impl LayerSelectorPane {
                 ])
             })
             .collect::<Vec<_>>()
+    }
+
+    pub fn move_within_pane(&mut self, direction: Direction, state: &AppState) -> anyhow::Result<Option<SideEffect>> {
+        let current_layer_idx = self.selected_layer_idx;
+
+        if current_layer_idx == state.layers.len() - 1 && matches!(direction, Direction::Forward)
+            || current_layer_idx == 0 && matches!(direction, Direction::Backward)
+        {
+            // Don't allow cycling through the layers endlessly
+            return Ok(None);
+        }
+
+        let next_layer_idx = match direction {
+            Direction::Forward => (current_layer_idx + 1) % state.layers.len(),
+            Direction::Backward => (current_layer_idx + state.layers.len() - 1) % state.layers.len(),
+        };
+
+        let (digest, _) = state
+            .layers
+            .get_index(next_layer_idx)
+            .context("unnable to find the next layer")?;
+
+        let all_current_layers = state
+            .layers
+            .get_range(..next_layer_idx + 1)
+            .context("bug: the next layer idx points to an invalid index")?;
+
+        let mut aggregated_layers = all_current_layers
+            .get_index(0)
+            .and_then(|(_, layer)| layer.changeset.clone())
+            .context("not a single layer in the all currently selected layers")?;
+
+        for (_, layer) in all_current_layers.get_range(1..).into_iter().flatten() {
+            if let Some(changeset) = layer.changeset.as_ref() {
+                aggregated_layers = aggregated_layers.merge(changeset.clone())
+            }
+        }
+
+        let aggregated_layers_changeset_size = aggregated_layers.iter().count();
+        self.selected_layer_digest = *digest;
+        self.selected_layer_idx = next_layer_idx;
+        self.selected_layers_changeset = (aggregated_layers, aggregated_layers_changeset_size);
+
+        Ok(Some(SideEffect::ChangesetUpdated))
     }
 
     pub fn scroll(&mut self, direction: Direction, pane_area: (u16, u16)) {

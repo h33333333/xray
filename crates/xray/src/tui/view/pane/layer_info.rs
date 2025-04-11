@@ -2,6 +2,7 @@ use std::borrow::Cow;
 
 use super::util::{Field, FieldKey};
 use crate::parser::{Layer, Sha256Digest};
+use crate::tui::action::Direction;
 use crate::tui::util::encode_hex;
 use crate::{render_order_enum, sort_fields_by_render_order};
 
@@ -42,5 +43,9 @@ impl LayerInfoPane {
         // This is not necessary, but ensures that there is only a single source of truth for the order of fields inside the pane.
         LayerInfoField::sort_fields_by_order(&mut fields);
         fields
+    }
+
+    pub fn toggle_active_field(&mut self, direction: Direction) {
+        self.active_field.toggle(direction);
     }
 }

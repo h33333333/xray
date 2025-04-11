@@ -10,6 +10,31 @@ use crate::render_order_enum;
 type CommandBarArea = Rect;
 type PaneAreas = [Rect; 4];
 
+#[derive(Debug)]
+pub struct ValueWithStringRepresentation<T> {
+    value: T,
+    string_representation: String,
+}
+
+impl<T: ToString> ValueWithStringRepresentation<T> {
+    pub fn new(value: T) -> Self {
+        let s = value.to_string();
+
+        ValueWithStringRepresentation {
+            value,
+            string_representation: s,
+        }
+    }
+
+    pub fn value(&self) -> &T {
+        &self.value
+    }
+
+    pub fn string_representation(&self) -> &str {
+        &self.string_representation
+    }
+}
+
 /// Represents the unit of a value.
 render_order_enum!(Unit, Bytes, Kilobytes, Megabytes, Gigabytes);
 
