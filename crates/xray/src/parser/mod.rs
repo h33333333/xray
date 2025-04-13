@@ -13,11 +13,14 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
-use constants::{BLOB_PATH_PREFIX, SHA256_DIGEST_LENGTH, TAR_BLOCK_SIZE, TAR_MAGIC_NUMBER, TAR_MAGIC_NUMBER_START_IDX};
+use constants::{
+    BLOB_PATH_PREFIX, IMAGE_MANIFEST_PATH, SHA256_DIGEST_LENGTH, TAR_BLOCK_SIZE, TAR_MAGIC_NUMBER,
+    TAR_MAGIC_NUMBER_START_IDX,
+};
 use indexmap::IndexMap;
 use json::{ImageHistory, ImageLayerConfigs, JsonBlob, Manifest};
 use serde::de::DeserializeOwned;
-use tar::Archive;
+use tar::{Archive, Header};
 pub use tree::TreeFilter;
 use tree::{Node, Tree};
 use util::{determine_blob_type, get_entry_size_in_blocks, sha256_digest_from_hex};
@@ -67,7 +70,6 @@ impl DirectoryState {
             children: DirMap::default(),
         }
     }
-
     pub fn new_with_size(size: u64) -> Self {
         DirectoryState {
             status: NodeStatus::Added(size),
@@ -112,6 +114,8 @@ pub struct Layer {
 }
 
 /// A parser for OCI-compliant container images represented as Tar blobs.
+///
+/// OCI specification source: [OCI Image Format Specification](https://github.com/opencontainers/image-spec)
 #[derive(Default)]
 pub struct Parser {
     parsed_layers: HashMap<Sha256Digest, (LayerChangeSet, LayerSize)>,
@@ -121,6 +125,7 @@ pub struct Parser {
     os: Option<String>,
     tagged_name: Option<String>,
 }
+
 impl Parser {
     pub fn new() -> Self {
         Parser::default()
@@ -139,8 +144,8 @@ impl Parser {
             let mut entry = entry.context("error while reading an entry")?;
 
             // Parse the image's manifest and extract name and tag
-            if entry.header().path_bytes().as_ref() == b"manifest.json" {
-                self.tagged_name = Some(Manifest::extract_image_name(&mut entry)?);
+            if entry.header().path_bytes().as_ref() == IMAGE_MANIFEST_PATH {
+                self.tagged_name = Some(Manifest::from_reader(&mut entry)?);
                 // We are done with this entry
                 continue;
             }
@@ -200,24 +205,11 @@ impl Parser {
                 BlobType::Json => {
                     let json_blob = self.parse_json_blob::<JsonBlob>(&mut tar_header[..offset].chain(entry))?;
                     if let Some(known_json_blob) = json_blob {
-                        match known_json_blob {
-                            JsonBlob::Manifest { layers: parsed_layers } => {
-                                self.layer_configs = Some(parsed_layers);
-                            }
-                            JsonBlob::Config {
-                                architecture: parsed_architecture,
-                                os: parsed_os,
-                                history: parsed_history,
-                            } => {
-                                self.architecture = Some(parsed_architecture);
-                                self.os = Some(parsed_os);
-                                self.history = Some(parsed_history);
-                            }
-                        }
+                        self.process_json_blob(known_json_blob);
                     };
                 }
                 BlobType::Unknown => {
-                    tracing::info!("Unknown blob type was encountered while parsing the image")
+                    tracing::debug!("Unknown blob type was encountered while parsing the image")
                 }
             }
         }
@@ -239,6 +231,24 @@ impl Parser {
         };
 
         Ok(parsed)
+    }
+
+    /// Processes a single known JSON blob extracted from an image.
+    fn process_json_blob(&mut self, json_blob: JsonBlob) {
+        match json_blob {
+            JsonBlob::Manifest { layers: parsed_layers } => {
+                self.layer_configs = Some(parsed_layers);
+            }
+            JsonBlob::Config {
+                architecture: parsed_architecture,
+                os: parsed_os,
+                history: parsed_history,
+            } => {
+                self.architecture = Some(parsed_architecture);
+                self.os = Some(parsed_os);
+                self.history = Some(parsed_history);
+            }
+        }
     }
 
     /// Parses a single image layer represented as a Tar blob.
@@ -272,56 +282,86 @@ impl Parser {
                 return Ok((change_set, layer_size));
             }
 
-            if let Ok(path) = header.path() {
-                if path == Path::new("./") {
-                    // Some images include the top-level element, which we don't need
-                    continue;
-                }
+            let Some((node_path, node, node_size)) = self
+                .process_layer_entry(header)
+                .context("failed to process an entry in the layer")?
+            else {
+                // A `None` means that we can safely skip this entry
+                continue;
+            };
 
-                let (path, node) = if header.entry_type().is_dir() {
-                    (path, Node::new_empty_dir())
-                } else {
-                    let size = header.size().unwrap_or(0);
-                    layer_size += size;
+            // Adjust the size
+            layer_size += node_size;
 
-                    let (path, status, link) =
-                        if let Some(link) = header.link_name().context("failed to retrieve the link name")? {
-                            (path, NodeStatus::Added(0), Some(link.into_owned()))
-                        } else if let Some(file_name) = path.file_name() {
-                            // Check if it's a whiteout
-                            if file_name.as_encoded_bytes().starts_with(b".wh.") {
-                                (
-                                    // Strip the whiteout prefix
-                                    Cow::Owned(path.with_file_name(OsStr::from_bytes(
-                                        // SAFETY: unwrap is safe, as we know that the prefix exists
-                                        file_name.as_encoded_bytes().strip_prefix(b".wh.").unwrap(),
-                                    ))),
-                                    NodeStatus::Deleted,
-                                    None,
-                                )
-                            } else if file_name.as_encoded_bytes() != b".wh..wh..opq" {
-                                (path, NodeStatus::Added(size), None)
-                            } else {
-                                // Simply ignoring opaque whiteouts does the trick
-                                // FIXME: no, it doesn't. I need to mark a directory as one that contains an opaque whiteout file
-                                // and then handle such directories correspondingly when merging the trees
-                                continue;
-                            }
-                        } else {
-                            // We can't do anything with such files
-                            continue;
-                        };
-
-                    (path, Node::File(FileState::new(status, link)))
-                };
-
-                change_set
-                    .insert(path, node, layer_digest)
-                    .context("failed to insert an entry")?;
-            }
+            change_set
+                .insert(node_path, node, layer_digest)
+                .context("failed to insert an entry")?;
         }
 
         Ok((change_set, layer_size))
+    }
+
+    /// Processes a TAR header of a single entry (a Node) in a layer.
+    ///
+    /// Returns the entry's full path, as well as its status and size.
+    fn process_layer_entry<'a>(&self, header: &'a Header) -> anyhow::Result<Option<(Cow<'a, Path>, Node, u64)>> {
+        let Ok(path) = header.path() else {
+            tracing::debug!(?header, "Got a malformed header when parsing an image");
+            // Don't error, continue to process the rest of the nodes as usual
+            return Ok(None);
+        };
+
+        if path == Path::new("./") {
+            // Some images include the top-level element, which we don't need
+            return Ok(None);
+        }
+
+        if header.entry_type().is_dir() {
+            return Ok(Some((path, Node::new_empty_dir(), 0)));
+        }
+
+        let size = header.size().unwrap_or(0);
+
+        // Check if it's a link
+        if let Some(link) = header.link_name().context("failed to retrieve the link name")? {
+            return Ok(Some((
+                path,
+                Node::File(FileState::new(NodeStatus::Added(0), Some(link.into_owned()))),
+                size,
+            )));
+        }
+
+        let Some(file_name) = path.file_name() else {
+            // We can't do anything with such files
+            return Ok(None);
+        };
+
+        let (path, status) = if file_name.as_encoded_bytes().starts_with(b".wh.") {
+            // A whiteout
+
+            // Strip the whiteout prefix
+            let path = Cow::Owned(
+                path.with_file_name(OsStr::from_bytes(
+                    file_name
+                        .as_encoded_bytes()
+                        .strip_prefix(b".wh.")
+                        .expect("prefix must exist at this point"),
+                )),
+            );
+
+            (path, NodeStatus::Deleted)
+        } else if file_name.as_encoded_bytes() != b".wh..wh..opq" {
+            // A regular file
+            (path, NodeStatus::Added(size))
+        } else {
+            // An opaque whiteout
+
+            // FIXME: I need to mark a directory as one that contains an opaque whiteout file
+            // and then handle such directories correspondingly when merging the trees
+            return Ok(None);
+        };
+
+        Ok(Some((path, Node::File(FileState::new(status, None)), size)))
     }
 
     /// Processes all the parsed data and turns it into an [Image].
@@ -345,7 +385,6 @@ impl Parser {
         {
             let (layer_changeset, layer_size) = per_layer_changeset
                 .remove(&layer_config.digest)
-                // Turn into `Option<LayerChangeset>` to avoid a pointless empty `Vec` allocation.
                 .map(|(changeset, size)| (Some(changeset), size))
                 // Changeset can be missing if layer didn't cause any FS changes
                 .unwrap_or_default();
@@ -379,7 +418,7 @@ impl Parser {
             architecture: self
                 .architecture
                 .context("malformed container image: missing architecture")?,
-            os: self.os.context("malformed container image: missing os")?,
+            os: self.os.context("malformed container image: missing OS")?,
             total_layers,
             non_empty_layers,
             layers,
@@ -387,6 +426,7 @@ impl Parser {
     }
 }
 
+/// Represents the type of a single TAR entry in an image.
 #[derive(Debug, Clone, Copy)]
 enum BlobType {
     Empty,

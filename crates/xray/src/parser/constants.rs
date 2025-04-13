@@ -8,3 +8,5 @@ pub(super) const TAR_MAGIC_NUMBER: &[u8] = b"ustar";
 
 pub(super) const SHA256_DIGEST_PREFIX: &[u8] = b"sha256:";
 pub(super) const SHA256_DIGEST_LENGTH: usize = 32;
+
+pub(super) const IMAGE_MANIFEST_PATH: &[u8] = b"manifest.json";

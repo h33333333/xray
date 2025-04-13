@@ -21,18 +21,23 @@ pub(super) struct Manifest {
 }
 
 impl Manifest {
-    pub fn extract_image_name(src: impl Read) -> anyhow::Result<String> {
+    pub fn from_reader(src: impl Read) -> anyhow::Result<String> {
         let manifest = serde_json::from_reader::<_, Manifest>(src).context("failed to parse the image's manifest")?;
         Ok(manifest.image_name)
     }
 }
 
+/// Represents known JSON files that can be encountered when parsing an OCI-compliant image.
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub(super) enum JsonBlob {
-    Manifest {
-        layers: ImageLayerConfigs,
-    },
+    /// Image Manifest.
+    ///
+    /// Source: [OCI Image Manifest Specification](https://github.com/opencontainers/image-spec/blob/main/manifest.md).
+    Manifest { layers: ImageLayerConfigs },
+    /// Image Config.
+    ///
+    /// Sourcce: [OCI Image Configuration](https://github.com/opencontainers/image-spec/blob/main/config.md)
     Config {
         architecture: String,
         os: String,
@@ -40,12 +45,9 @@ pub(super) enum JsonBlob {
     },
 }
 
-#[derive(Debug, Deserialize)]
-pub(super) struct LayerConfig {
-    #[serde(deserialize_with = "deserialize_sha256_hash")]
-    pub digest: Sha256Digest,
-}
-
+/// Represents a subset of fields of a single entry in the `history` array that can be found in an OCI Image Config.
+///
+/// Source: [OCI Image Configuration](https://github.com/opencontainers/image-spec/blob/main/config.md#properties)
 #[derive(Debug, Deserialize)]
 pub(super) struct HistoryEntry {
     pub created_by: String,
@@ -54,8 +56,17 @@ pub(super) struct HistoryEntry {
     pub empty_layer: bool,
 }
 
+/// Represents a subset of fields of a single entry in the `layers` array that can be found in an OCI Image Manifest.
+///
+/// Source: [OCI Image Manifest Specification](https://github.com/opencontainers/image-spec/blob/main/manifest.md#image-manifest-property-descriptions)
+#[derive(Debug, Deserialize)]
+pub(super) struct LayerConfig {
+    #[serde(deserialize_with = "deserialize_sha256_digest")]
+    pub digest: Sha256Digest,
+}
+
 /// Deserializes a hex string with SHA256 digest that is prepended with the `sha256:` prefix.
-fn deserialize_sha256_hash<'de, D>(de: D) -> Result<Sha256Digest, D::Error>
+fn deserialize_sha256_digest<'de, D>(de: D) -> Result<Sha256Digest, D::Error>
 where
     D: Deserializer<'de>,
 {

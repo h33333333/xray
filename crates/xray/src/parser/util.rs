@@ -34,11 +34,11 @@ pub(super) fn sha256_digest_from_hex(src: impl AsRef<[u8]>) -> anyhow::Result<Sh
 /// Converts a Tar entry's [size](Header::entry_size) to the number of Tar blocks, rounding up.
 pub(super) fn get_entry_size_in_blocks(header: &Header) -> anyhow::Result<u64> {
     let entry_size = header.entry_size().context("failed to get the entry's file size")?;
-    if entry_size != 0 {
-        Ok((entry_size / TAR_BLOCK_SIZE as u64) + (entry_size % TAR_BLOCK_SIZE as u64 != 0) as u64)
-    } else {
-        Ok(0)
+    if entry_size == 0 {
+        return Ok(0);
     }
+
+    Ok((entry_size / TAR_BLOCK_SIZE as u64) + (entry_size % TAR_BLOCK_SIZE as u64 != 0) as u64)
 }
 
 /// Determines the type of a blob by reading the first [Tar block](TAR_BLOCK_SIZE) and checking its contents.

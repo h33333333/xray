@@ -14,7 +14,7 @@ pub const LOGGING_FILE_ENV: &str = "XRAY_LOG_FILE";
 
 pub fn init_logging(config_folder: &Path) -> anyhow::Result<()> {
     let mut log_path = config_folder.to_path_buf();
-    log_path.push("app.log");
+    log_path.push("xray.log");
 
     let log_file = File::options()
         .create(true)
@@ -44,7 +44,7 @@ pub fn init_logging(config_folder: &Path) -> anyhow::Result<()> {
                 EnvFilter::builder()
                     .with_env_var(LOGGING_FILE_ENV)
                     .try_from_env()
-                    .unwrap_or_else(|_| format!("{}=trace", env!("CARGO_CRATE_NAME")).into()),
+                    .unwrap_or_else(|_| format!("{}=info", env!("CARGO_CRATE_NAME")).into()),
             ),
         )
         .try_init()
