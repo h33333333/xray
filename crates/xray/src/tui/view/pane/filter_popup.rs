@@ -7,7 +7,7 @@ use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, BorderType, Padding, Paragraph, Wrap};
 use regex::Regex;
 
-use crate::parser::TreeFilter;
+use crate::parser::NodeFilters;
 use crate::render_order_enum;
 use crate::tui::action::Direction;
 use crate::tui::util::Unit;
@@ -21,7 +21,7 @@ const POPUP_PADDING: Padding = Padding {
 
 render_order_enum!(FilterInput, PathFilter, SizeFilter);
 
-render_order_enum!(PathFilterKind, Regular, Regexp);
+render_order_enum!(PathFilterKind, Regular, Regex);
 
 #[derive(Default, Debug)]
 pub struct FilterPopup {
@@ -88,12 +88,12 @@ impl FilterPopup {
         }
     }
 
-    pub fn filters(&self) -> TreeFilter<'_, '_> {
-        let mut filter = TreeFilter::default().with_size_filter(self.size_filter_in_units());
+    pub fn filters(&self) -> NodeFilters<'_, '_> {
+        let mut filter = NodeFilters::default().with_size_filter(self.size_filter_in_units());
 
         match self.path_filter_kind {
             PathFilterKind::Regular => filter = filter.with_path_filter(Path::new(&self.path_filter)),
-            PathFilterKind::Regexp => {
+            PathFilterKind::Regex => {
                 if let Some(regex) = self.path_regex() {
                     filter = filter.with_regex(regex);
                 }
@@ -120,7 +120,7 @@ impl FilterPopup {
         match self.active_input {
             FilterInput::PathFilter => match self.path_filter_kind {
                 PathFilterKind::Regular => "  Path Filter  ",
-                PathFilterKind::Regexp => "  Path Filter (RegExp)  ",
+                PathFilterKind::Regex => "  Path Filter (RegEx)  ",
             },
             FilterInput::SizeFilter => "  Node Size Filter  ",
         }

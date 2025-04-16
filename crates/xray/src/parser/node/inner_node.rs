@@ -1,190 +1,41 @@
-mod iter;
-
 use std::borrow::Cow;
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use anyhow::Context;
-use iter::TreeIter;
-use regex::Regex;
+use anyhow::Context as _;
 
-use super::{DirectoryState, FileState, NodeStatus, Sha256Digest};
-
-pub type DirMap = BTreeMap<PathBuf, Tree>;
+use super::{Node, NodeFilters};
+use crate::parser::{DirMap, DirectoryState, FileState, NodeStatus};
 
 #[derive(Clone)]
-pub struct Tree {
-    pub updated_in: Sha256Digest,
-    pub node: Node,
-}
-
-impl Tree {
-    pub fn new(updated_in: Sha256Digest) -> Self {
-        Tree {
-            updated_in,
-            node: Node::default(),
-        }
-    }
-
-    pub fn new_with_node(updated_in: Sha256Digest, node: Node) -> Self {
-        Tree { updated_in, node }
-    }
-
-    pub fn insert(&mut self, path: impl AsRef<Path>, new_node: Node, layer_digest: Sha256Digest) -> anyhow::Result<()> {
-        self.updated_in = layer_digest;
-        self.node.insert(path, new_node, layer_digest)
-    }
-
-    pub fn merge(mut self, other: Self) -> Self {
-        self.updated_in = other.updated_in;
-        self.node = self.node.merge(other.node, &other.updated_in);
-        self
-    }
-
-    pub fn filter(&mut self, mut filter: TreeFilter) -> bool {
-        // Strip the leading slash from the path filter if it's present
-        if let Some(path_filter) = filter.path_filter.as_mut() {
-            path_filter.path = path_filter.path.strip_prefix("/").ok().unwrap_or(path_filter.path);
-        }
-
-        self.node.filter(filter)
-    }
-
-    pub fn iter(&self) -> TreeIter<'_> {
-        TreeIter::new(self, false)
-    }
-
-    pub fn iter_with_levels(&self) -> TreeIter<'_> {
-        TreeIter::new(self, true)
-    }
-}
-
-impl std::fmt::Debug for Tree {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut iter = self.iter_with_levels();
-        loop {
-            let Some((path, _, depth, _)) = iter.next() else { break };
-            for level in 0..depth {
-                if iter.is_level_active(level).unwrap_or_default() {
-                    write!(f, "│   ")?;
-                } else {
-                    write!(f, "    ")?;
-                }
-            }
-            if iter.is_level_active(depth).unwrap_or_default() {
-                writeln!(f, "├── {}", path.display())?;
-            } else {
-                writeln!(f, "└── {}", path.display())?;
-            }
-        }
-        Ok(())
-    }
-}
-
-#[derive(Clone)]
-struct RestorablePathFilter<'a> {
-    path: &'a Path,
-    current_component_idx: u8,
-    is_using_relative_path: bool,
-}
-
-impl<'a> RestorablePathFilter<'a> {
-    fn new(path: &'a Path) -> Self {
-        RestorablePathFilter {
-            path,
-            current_component_idx: 0,
-            is_using_relative_path: !path.starts_with("/"),
-        }
-    }
-
-    fn get_current_component(&self) -> Option<&Path> {
-        self.path.iter().nth(self.current_component_idx as usize).map(Path::new)
-    }
-
-    fn restore(&self) -> Self {
-        RestorablePathFilter {
-            path: self.path,
-            current_component_idx: 0,
-            is_using_relative_path: self.is_using_relative_path,
-        }
-    }
-
-    fn advance(&self) -> Self {
-        RestorablePathFilter {
-            path: self.path,
-            current_component_idx: self.current_component_idx + 1,
-            is_using_relative_path: self.is_using_relative_path,
-        }
-    }
-}
-
-#[derive(Default)]
-pub struct TreeFilter<'a, 'r> {
-    path_filter: Option<RestorablePathFilter<'a>>,
-    node_size_filter: Option<u64>,
-    path_regexp: Option<Cow<'r, Regex>>,
-}
-
-impl<'a, 'r> TreeFilter<'a, 'r> {
-    pub fn with_path_filter<'n>(self, filter: &'n Path) -> TreeFilter<'n, 'r> {
-        TreeFilter {
-            path_filter: Some(RestorablePathFilter::new(filter)),
-            node_size_filter: self.node_size_filter,
-            path_regexp: None,
-        }
-    }
-
-    pub fn with_size_filter(self, filter: u64) -> Self {
-        TreeFilter {
-            path_filter: self.path_filter,
-            node_size_filter: Some(filter),
-            path_regexp: self.path_regexp,
-        }
-    }
-
-    pub fn with_regex<'n>(self, regex: Cow<'n, Regex>) -> TreeFilter<'a, 'n> {
-        TreeFilter {
-            path_filter: None,
-            node_size_filter: self.node_size_filter,
-            path_regexp: Some(regex),
-        }
-    }
-
-    pub fn any(&self) -> bool {
-        self.path_filter.is_some() || self.node_size_filter.is_some() || self.path_regexp.is_some()
-    }
-}
-
-#[derive(Clone)]
-pub enum Node {
+pub enum InnerNode {
     File(FileState),
     Directory(DirectoryState),
 }
 
-impl Node {
+impl InnerNode {
     pub fn new_dir_with_size(size: u64) -> Self {
-        Node::Directory(DirectoryState::new_with_size(size))
+        InnerNode::Directory(DirectoryState::new_with_size(size))
     }
 
     pub fn new_empty_dir() -> Self {
-        Node::Directory(DirectoryState::new_empty())
+        InnerNode::Directory(DirectoryState::new_empty())
     }
 
     pub fn is_dir(&self) -> bool {
-        matches!(self, Node::Directory(..))
+        matches!(self, InnerNode::Directory(..))
     }
 
     pub fn children(&self) -> Option<&DirMap> {
         match self {
-            Node::Directory(state) => Some(&state.children),
+            InnerNode::Directory(state) => Some(&state.children),
             _ => None,
         }
     }
 
     pub fn status(&self) -> NodeStatus {
         match self {
-            Node::File(state) => state.status,
-            Node::Directory(state) => state.status,
+            InnerNode::File(state) => state.status,
+            InnerNode::Directory(state) => state.status,
         }
     }
 
@@ -199,28 +50,28 @@ impl Node {
         let children = self.children()?;
         let mut n_of_children = children.len();
         for (_, child_node) in children.iter() {
-            n_of_children += child_node.node.get_n_of_child_nodes().unwrap_or(0)
+            n_of_children += child_node.inner.get_n_of_child_nodes().unwrap_or(0)
         }
         Some(n_of_children)
     }
 
     pub fn file_state(&self) -> Option<&FileState> {
         match self {
-            Node::File(state) => Some(state),
+            InnerNode::File(state) => Some(state),
             _ => None,
         }
     }
 
     pub fn dir_state_mut(&mut self) -> Option<&mut DirectoryState> {
         match self {
-            Node::Directory(state) => Some(state),
+            InnerNode::Directory(state) => Some(state),
             _ => None,
         }
     }
 
     pub fn get_link(&self) -> Option<&Path> {
         match self {
-            Node::File(state) => state.actual_file.as_deref(),
+            InnerNode::File(state) => state.actual_file.as_deref(),
             _ => None,
         }
     }
@@ -237,24 +88,24 @@ impl Node {
         matches!(self.status(), NodeStatus::Deleted)
     }
 
-    fn filter(&mut self, filter: TreeFilter) -> bool {
+    pub(super) fn filter(&mut self, filter: NodeFilters) -> bool {
         if !filter.any() {
             // No filters -> entry is always included
             return true;
         }
 
         // We ignore files here, as they are handled when processing children of directories
-        if let Node::Directory(state) = self {
+        if let InnerNode::Directory(state) = self {
             state.children.retain(|path, child| {
                 let is_dir_with_children = child
-                    .node
+                    .inner
                     .children()
                     .map(|children| !children.is_empty())
                     .unwrap_or(false);
 
                 // Size-based filtering
                 if let Some(node_size_filter) = filter.node_size_filter {
-                    if child.node.size() < node_size_filter {
+                    if child.inner.size() < node_size_filter {
                         return false;
                     }
                 }
@@ -278,7 +129,7 @@ impl Node {
                     };
 
                     // Directories are filtered out based on their children when using relative path
-                    if is_filtered_out && (!path_filter.is_using_relative_path || !is_dir_with_children) {
+                    if is_filtered_out && (!path_filter.is_using_relative_path() || !is_dir_with_children) {
                         // Exclude filtered out nodes (files, empty dirs, and mismatched dirs when using an absolute path)
                         return false;
                     }
@@ -315,14 +166,14 @@ impl Node {
                 };
 
                 // Regex-based filtering
-                if let Some(regex) = filter.path_regexp.as_deref() {
+                if let Some(regex) = filter.path_regex.as_deref() {
                     let Some(path) = path.to_str() else {
                         // Exclude this node otherwise
                         return false;
                     };
 
                     if regex.is_match(path) {
-                        // Include both directories and files if they satisfy the RegExp.
+                        // Include both directories and files if they satisfy the RegEx.
                         // We don't check children of directories in this case.
                         return true;
                     } else {
@@ -334,10 +185,10 @@ impl Node {
                     }
                 }
 
-                child.filter(TreeFilter {
+                child.filter(NodeFilters {
                     path_filter: path_filter_for_child,
                     node_size_filter: filter.node_size_filter,
-                    path_regexp: filter.path_regexp.as_deref().map(Cow::Borrowed),
+                    path_regex: filter.path_regex.as_deref().map(Cow::Borrowed),
                 })
             });
 
@@ -348,7 +199,7 @@ impl Node {
     }
 
     // TODO: rewrite this function to use recursion
-    fn insert(&mut self, path: impl AsRef<Path>, new_node: Self, layer_digest: Sha256Digest) -> anyhow::Result<()> {
+    pub(super) fn insert(&mut self, path: impl AsRef<Path>, new_node: Self, layer_digest: u8) -> anyhow::Result<()> {
         let mut path_components = path.as_ref().iter();
 
         let Some(node_name) = path_components.next_back() else {
@@ -358,19 +209,19 @@ impl Node {
         };
 
         let directory =
-            path_components.try_fold::<_, _, Result<&mut Node, anyhow::Error>>(self, |node, component| {
-                let next_node = if let Node::Directory(state) = node {
+            path_components.try_fold::<_, _, Result<&mut InnerNode, anyhow::Error>>(self, |node, component| {
+                let next_node = if let InnerNode::Directory(state) = node {
                     if !state.children.contains_key(Path::new(component)) {
                         state.children.insert(
                             Path::new(component).into(),
-                            Tree::new_with_node(layer_digest, Node::Directory(DirectoryState::new_empty())),
+                            Node::new_with_node(layer_digest, InnerNode::Directory(DirectoryState::new_empty())),
                         );
                     }
                     let existing_node = &mut state
                         .children
                         .get_mut(Path::new(component))
                         .context("impossible: we just inserted the node above")?
-                        .node;
+                        .inner;
 
                     // Update the sizes
                     if let Some(state) = existing_node.dir_state_mut() {
@@ -389,12 +240,12 @@ impl Node {
                     let mut dir_state = DirectoryState::new_with_size(new_node.size());
                     dir_state.children.insert(
                         Path::new(component).into(),
-                        Tree::new_with_node(
+                        Node::new_with_node(
                             layer_digest,
-                            Node::Directory(DirectoryState::new_with_size(new_node.size())),
+                            InnerNode::Directory(DirectoryState::new_with_size(new_node.size())),
                         ),
                     );
-                    *node = Node::Directory(dir_state);
+                    *node = InnerNode::Directory(dir_state);
 
                     &mut node
                         .dir_state_mut()
@@ -402,16 +253,16 @@ impl Node {
                         .children
                         .get_mut(Path::new(component))
                         .context("impossible: we just inserted the node above")?
-                        .node
+                        .inner
                 };
                 Ok(next_node)
             })?;
 
-        let state = if let Node::Directory(state) = directory {
+        let state = if let InnerNode::Directory(state) = directory {
             state
         } else {
             // Ensure that the last node before the new node is a directory
-            *directory = Node::new_empty_dir();
+            *directory = InnerNode::new_empty_dir();
             directory
                 .dir_state_mut()
                 .context("impossible: we created a directory above")?
@@ -419,34 +270,34 @@ impl Node {
 
         state
             .children
-            .insert(node_name.into(), Tree::new_with_node(layer_digest, new_node));
+            .insert(node_name.into(), Node::new_with_node(layer_digest, new_node));
 
         Ok(())
     }
 
-    fn merge(mut self, other: Self, digest: &Sha256Digest) -> Self {
+    pub(super) fn merge(mut self, other: Self, digest: u8) -> Self {
         match (&mut self, other) {
-            (Node::Directory(left_state), Node::Directory(right_state)) => {
+            (InnerNode::Directory(left_state), InnerNode::Directory(right_state)) => {
                 for (path, right_node) in right_state.children {
                     let updated_node = if let Some(left_node) = left_state.children.remove(&path) {
-                        left_node.node.merge(right_node.node, digest)
+                        left_node.inner.merge(right_node.inner, digest)
                     } else {
-                        right_node.node
+                        right_node.inner
                     };
                     left_state
                         .children
-                        .insert(path, Tree::new_with_node(right_node.updated_in, updated_node));
+                        .insert(path, Node::new_with_node(right_node.updated_in, updated_node));
                 }
                 let new_state = match (&left_state.status, &right_state.status) {
                     (_, NodeStatus::Added(_)) => {
                         // Calculate the updated directory size after merging
-                        NodeStatus::Modified(left_state.children.values().map(|tree| tree.node.size()).sum())
+                        NodeStatus::Modified(left_state.children.values().map(|tree| tree.inner.size()).sum())
                     }
                     (_, _) => right_state.status,
                 };
                 left_state.status = new_state;
             }
-            (Node::File(left_state), Node::File(right_state)) => {
+            (InnerNode::File(left_state), InnerNode::File(right_state)) => {
                 let new_state = match (&left_state.status, &right_state.status) {
                     (_, NodeStatus::Added(new_size)) => NodeStatus::Modified(*new_size),
                     (_, _) => right_state.status,
@@ -467,26 +318,26 @@ impl Node {
         self
     }
 
-    fn mark_as_deleted(&mut self, digest: &Sha256Digest) {
+    pub(super) fn mark_as_deleted(&mut self, digest: u8) {
         match self {
-            Node::Directory(state) => {
+            InnerNode::Directory(state) => {
                 // Mark the directory itself as deleted
                 state.status = NodeStatus::Deleted;
                 // Mark each children as deleted recursively
                 for tree in state.children.values_mut() {
-                    tree.updated_in = *digest;
-                    tree.node.mark_as_deleted(digest);
+                    tree.updated_in = digest;
+                    tree.inner.mark_as_deleted(digest);
                 }
             }
-            Node::File(state) => {
+            InnerNode::File(state) => {
                 state.status = NodeStatus::Deleted;
             }
         }
     }
 }
 
-impl Default for Node {
+impl Default for InnerNode {
     fn default() -> Self {
-        Node::new_empty_dir()
+        InnerNode::new_empty_dir()
     }
 }

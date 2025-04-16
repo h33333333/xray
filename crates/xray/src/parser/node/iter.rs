@@ -1,15 +1,15 @@
 use std::collections::{HashSet, VecDeque};
 use std::path::Path;
 
-use super::Tree;
+use super::Node;
 
 pub struct TreeIter<'a> {
-    queue: VecDeque<(&'a Tree, &'a Path, usize)>,
+    queue: VecDeque<(&'a Node, &'a Path, usize)>,
     active_levels: Option<HashSet<usize>>,
 }
 
 impl<'a> TreeIter<'a> {
-    pub fn new(tree: &'a Tree, track_levels: bool) -> Self {
+    pub fn new(tree: &'a Node, track_levels: bool) -> Self {
         let mut queue = VecDeque::new();
         queue.push_back((tree, Path::new("."), 0));
         TreeIter {
@@ -28,7 +28,7 @@ impl<'a> TreeIter<'a> {
 }
 
 impl<'a> Iterator for TreeIter<'a> {
-    type Item = (&'a Path, &'a Tree, usize, bool);
+    type Item = (&'a Path, &'a Node, usize, bool);
 
     fn next(&mut self) -> Option<Self::Item> {
         let (next_node, path, depth) = self.queue.pop_front()?;
@@ -48,7 +48,7 @@ impl<'a> Iterator for TreeIter<'a> {
             }
         }
 
-        if let Some(children) = next_node.node.children() {
+        if let Some(children) = next_node.inner.children() {
             for (child_path, node) in children.iter().rev() {
                 self.queue.push_front((node, child_path, depth + 1));
             }
@@ -74,7 +74,7 @@ impl<'a> EnumeratedNodeIter<'a> {
 }
 
 impl<'a> Iterator for EnumeratedNodeIter<'a> {
-    type Item = (usize, (&'a Path, &'a Tree, usize, bool));
+    type Item = (usize, (&'a Path, &'a Node, usize, bool));
 
     fn next(&mut self) -> Option<Self::Item> {
         let idx = self.count;

@@ -50,6 +50,7 @@ impl HelpPopup {
     }
 }
 
+// FIXME: fix the hotkeys, add color guide (i.e. how does a deleted/modified/added file look like)
 fn get_common_hotkeys() -> Vec<(&'static str, &'static str)> {
     vec![
         ("down, j", "Move cursor down"),

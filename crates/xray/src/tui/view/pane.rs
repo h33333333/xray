@@ -95,7 +95,7 @@ impl Pane {
                 widget.set_pane(Paragraph::new(Text::from(lines)).block(block));
             }
             Pane::LayerInfo(pane_state) => {
-                let (selected_layer_digest, selected_layer) = state
+                let (selected_layer_digest, selected_layer, _) = state
                     .get_selected_layer()
                     .context("failed to get the currently selected layer")?;
 
@@ -118,7 +118,7 @@ impl Pane {
             }
             Pane::LayerInspector(pane_state) => {
                 let (layer_changeset, _) = state.get_aggregated_layers_changeset()?;
-                let (current_layer_digest, _) = state.get_selected_layer()?;
+                let (_, _, current_layer_idx) = state.get_selected_layer()?;
                 let show_path_filter = pane_is_active && pane_state.is_showing_filter_popup;
 
                 let lines = pane_state
@@ -131,7 +131,7 @@ impl Pane {
                             if node_is_active {
                                 // Underlining doesn't look that good in the file tree, so just use a standard BoW outline
                                 ACTIVE_INSPECTOR_NODE_STYLE
-                            } else if node_updated_in == current_layer_digest {
+                            } else if node_updated_in == current_layer_idx as u8 {
                                 if node_is_deleted {
                                     DELETED_INSPECTOR_NODE_STYLE
                                 } else if node_is_modified {
@@ -193,7 +193,7 @@ impl Pane {
                 ImageInfoField::Os => os.into(),
             }),
             Pane::LayerInfo(LayerInfoPane { active_field }) => {
-                let Ok((selected_layer_digest, selected_layer)) = state.get_selected_layer() else {
+                let Ok((selected_layer_digest, selected_layer, _)) = state.get_selected_layer() else {
                     // Add a log here for debugging purposes in case this happens somehow
                     tracing::debug!("Failed to get the currently selected layer when getting the selected field from the LayerInfo pane");
                     return None;
@@ -338,7 +338,7 @@ pub fn init_panes(image: &mut Image) -> anyhow::Result<[(Option<Pane>, Rect); 4]
     let layer_selector_pane = Pane::LayerSelector(LayerSelectorPane::new(
         *digest,
         0,
-        layer.changeset.clone().unwrap_or(LayerChangeSet::new(*digest)),
+        layer.changeset.clone().unwrap_or(LayerChangeSet::new(0)),
         longest_layer_creation_command,
     ));
     let layer_info_pane = Pane::LayerInfo(LayerInfoPane::default());

@@ -56,8 +56,8 @@ impl AppState {
         })
     }
 
-    /// Returns a reference to the currently selected [Layer] and its [Sha256Digest].
-    pub fn get_selected_layer(&self) -> anyhow::Result<(&Sha256Digest, &Layer)> {
+    /// Returns a reference to the currently selected [Layer], its [Sha256Digest], and index.
+    pub fn get_selected_layer(&self) -> anyhow::Result<(&Sha256Digest, &Layer, usize)> {
         let layer_selector_pane_idx: usize = ActivePane::LayerSelector.into();
         let (layer_selector_pane, _) = &self.panes[layer_selector_pane_idx];
         let selected_layer_idx = if let Some(Pane::LayerSelector(pane)) = layer_selector_pane {
@@ -65,9 +65,11 @@ impl AppState {
         } else {
             anyhow::bail!("layer selector pane is no longer at the expected position in the UI");
         };
-        self.layers
+        let (digest, layer) = self
+            .layers
             .get_index(selected_layer_idx)
-            .context("selected layer has an invalid index")
+            .context("selected layer has an invalid index")?;
+        Ok((digest, layer, selected_layer_idx))
     }
 
     /// Returns a reference to the aggregated [LayerChangeSet] of the currently selected layer and its parents.

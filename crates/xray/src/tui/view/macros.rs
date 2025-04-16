@@ -49,7 +49,7 @@ macro_rules! render_order_enum {
                 if let Ok(next_variant) = $name::try_from(next_variant_idx) {
                     *self = next_variant;
                 } else {
-                    // This is pretty much uncreacheable, as macro ensures that the `next_variant_idx` is always valid.
+                    // This is pretty much unreacheable, as macro ensures that the `next_variant_idx` is always valid.
                     // Still, I don't want the app to panic in this case. A simple log is enough.
                     tracing::debug!("Failed to toggle the currently active element for {}. Unknown index: {}", stringify!($name), next_variant_idx);
                 }

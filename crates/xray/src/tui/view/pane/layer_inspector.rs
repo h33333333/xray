@@ -6,7 +6,7 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 
 use super::filter_popup::FilterPopup;
-use crate::parser::{LayerChangeSet, Sha256Digest};
+use crate::parser::LayerChangeSet;
 use crate::tui::action::Direction;
 use crate::tui::store::AppState;
 use crate::tui::util::bytes_to_human_readable_units;
@@ -40,7 +40,7 @@ impl LayerInspectorPane {
     pub fn changeset_to_lines<'a>(
         &self,
         changeset: &'a LayerChangeSet,
-        get_node_style: impl Fn(bool, &Sha256Digest, bool, bool) -> Style,
+        get_node_style: impl Fn(bool, u8, bool, bool) -> Style,
         visible_rows: u16,
     ) -> anyhow::Result<Vec<Line<'a>>> {
         let mut lines = vec![];
@@ -73,7 +73,7 @@ impl LayerInspectorPane {
                 }
             }
 
-            let (node_size, unit) = bytes_to_human_readable_units(node.node.size());
+            let (node_size, unit) = bytes_to_human_readable_units(node.inner.size());
             let node_is_active = idx == current_node_idx && !self.is_showing_filter_popup;
 
             let mut node_tree_branch = String::with_capacity((depth - 1) * BRANCH_INDICATOR_LENGTH);
@@ -106,19 +106,16 @@ impl LayerInspectorPane {
                     format!("   {:>5.1} {:<2}   ", node_size, unit.human_readable()),
                     get_node_style(
                         node_is_active,
-                        &node.updated_in,
-                        node.node.is_deleted(),
-                        node.node.is_modified(),
+                        node.updated_in,
+                        node.inner.is_deleted(),
+                        node.inner.is_modified(),
                     ),
                 ),
-                Span::styled(
-                    node_tree_branch,
-                    get_node_style(node_is_active, &Sha256Digest::default(), false, false),
-                ),
+                Span::styled(node_tree_branch, get_node_style(node_is_active, u8::MAX, false, false)),
             ];
 
             let mut path = format!(" {}", path.display());
-            if let Some(link) = node.node.get_link() {
+            if let Some(link) = node.inner.get_link() {
                 write!(&mut path, " -> {}", link.display())
                     .with_context(|| format!("failed to format a link {}", idx))?;
             }
@@ -127,9 +124,9 @@ impl LayerInspectorPane {
                 path,
                 get_node_style(
                     node_is_active,
-                    &node.updated_in,
-                    node.node.is_deleted(),
-                    node.node.is_modified(),
+                    node.updated_in,
+                    node.inner.is_deleted(),
+                    node.inner.is_modified(),
                 ),
             ));
             lines.push(Line::from(spans));
@@ -187,7 +184,7 @@ impl LayerInspectorPane {
             .is_current_node_collapsed()
             .then(|| {
                 if let Some((_, (_, current_node, _, _))) = tree.iter().enumerate().nth(self.current_node_idx + 1) {
-                    current_node.node.get_n_of_child_nodes()
+                    current_node.inner.get_n_of_child_nodes()
                 } else {
                     tracing::debug!(
                         current_node_idx = self.current_node_idx,
@@ -267,11 +264,11 @@ impl LayerInspectorPane {
             .context("bug: current node has invalid index")?;
 
         // Mark current directory as collapsed
-        if current_node.node.is_dir() && self.collapsed_nodes.remove(&self.current_node_idx).is_none() {
+        if current_node.inner.is_dir() && self.collapsed_nodes.remove(&self.current_node_idx).is_none() {
             self.collapsed_nodes.insert(
                 self.current_node_idx,
                 current_node
-                    .node
+                    .inner
                     .get_n_of_child_nodes()
                     .context("bug: should have been unreacheable")?,
             );

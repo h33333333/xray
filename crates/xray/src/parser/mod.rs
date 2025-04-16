@@ -2,7 +2,7 @@
 
 mod constants;
 mod json;
-mod tree;
+mod node;
 mod util;
 
 use std::borrow::Cow;
@@ -19,15 +19,15 @@ use constants::{
 };
 use indexmap::IndexMap;
 use json::{ImageHistory, ImageLayerConfigs, JsonBlob, Manifest};
+pub use node::NodeFilters;
+use node::{InnerNode, Node};
 use serde::de::DeserializeOwned;
 use tar::{Archive, Header};
-pub use tree::TreeFilter;
-use tree::{Node, Tree};
 use util::{determine_blob_type, get_entry_size_in_blocks, sha256_digest_from_hex};
 
 pub type Sha256Digest = [u8; SHA256_DIGEST_LENGTH];
-pub type LayerChangeSet = Tree;
-pub type DirMap = BTreeMap<PathBuf, Tree>;
+pub type LayerChangeSet = Node;
+pub type DirMap = BTreeMap<PathBuf, Node>;
 
 type LayerSize = u64;
 
@@ -187,11 +187,7 @@ impl Parser {
                     }
 
                     let (layer_changeset, layer_size) = self
-                        .parse_tar_blob(
-                            &mut reader,
-                            entry_size_in_blocks * TAR_BLOCK_SIZE as u64,
-                            layer_sha256_digest,
-                        )
+                        .parse_tar_blob(&mut reader, entry_size_in_blocks * TAR_BLOCK_SIZE as u64)
                         .context("error while parsing a tar layer")?;
 
                     self.parsed_layers
@@ -256,13 +252,13 @@ impl Parser {
         &self,
         src: &mut R,
         blob_size: u64,
-        layer_digest: Sha256Digest,
     ) -> anyhow::Result<(LayerChangeSet, LayerSize)> {
         let mut archive = Archive::new(src);
         // We don't want to stop when we encounter an empty Tar header, as we want to parse other blobs as well
         archive.set_ignore_zeros(true);
 
-        let mut change_set = LayerChangeSet::new(layer_digest);
+        // We will set the actual layer idx later in [Self::finalize]
+        let mut change_set = LayerChangeSet::new(0);
 
         let mut layer_size = 0;
         for entry in archive
@@ -294,7 +290,8 @@ impl Parser {
             layer_size += node_size;
 
             change_set
-                .insert(node_path, node, layer_digest)
+                // We will set the actual layer idx later in [Self::finalize]
+                .insert(node_path, node, 0)
                 .context("failed to insert an entry")?;
         }
 
@@ -304,7 +301,7 @@ impl Parser {
     /// Processes a TAR header of a single entry (a Node) in a layer.
     ///
     /// Returns the entry's full path, as well as its status and size.
-    fn process_layer_entry<'a>(&self, header: &'a Header) -> anyhow::Result<Option<(Cow<'a, Path>, Node, u64)>> {
+    fn process_layer_entry<'a>(&self, header: &'a Header) -> anyhow::Result<Option<(Cow<'a, Path>, InnerNode, u64)>> {
         let Ok(path) = header.path() else {
             tracing::debug!(?header, "Got a malformed header when parsing an image");
             // Don't error, continue to process the rest of the nodes as usual
@@ -317,7 +314,7 @@ impl Parser {
         }
 
         if header.entry_type().is_dir() {
-            return Ok(Some((path, Node::new_empty_dir(), 0)));
+            return Ok(Some((path, InnerNode::new_empty_dir(), 0)));
         }
 
         let size = header.size().unwrap_or(0);
@@ -326,7 +323,7 @@ impl Parser {
         if let Some(link) = header.link_name().context("failed to retrieve the link name")? {
             return Ok(Some((
                 path,
-                Node::File(FileState::new(NodeStatus::Added(0), Some(link.into_owned()))),
+                InnerNode::File(FileState::new(NodeStatus::Added(0), Some(link.into_owned()))),
                 size,
             )));
         }
@@ -361,7 +358,7 @@ impl Parser {
             return Ok(None);
         };
 
-        Ok(Some((path, Node::File(FileState::new(status, None)), size)))
+        Ok(Some((path, InnerNode::File(FileState::new(status, None)), size)))
     }
 
     /// Processes all the parsed data and turns it into an [Image].
@@ -383,11 +380,18 @@ impl Parser {
             .into_iter()
             .zip(layers_history.into_iter().filter(|entry| !entry.empty_layer))
         {
-            let (layer_changeset, layer_size) = per_layer_changeset
+            let (mut layer_changeset, layer_size) = per_layer_changeset
                 .remove(&layer_config.digest)
                 .map(|(changeset, size)| (Some(changeset), size))
                 // Changeset can be missing if layer didn't cause any FS changes
                 .unwrap_or_default();
+
+            if let Some(changeset) = layer_changeset.as_mut() {
+                // Set the correct parent layer idx for all items in the changeset
+                //
+                // NOTE: an image can only have 127 layers, so the cast is perfectly fine
+                changeset.set_layer_recursively(layers.len() as u8)
+            }
 
             image_size += layer_size;
             layers.insert(
