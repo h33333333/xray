@@ -214,7 +214,7 @@ impl InnerNode {
                     if !state.children.contains_key(Path::new(component)) {
                         state.children.insert(
                             Path::new(component).into(),
-                            Node::new_with_node(layer_digest, InnerNode::Directory(DirectoryState::new_empty())),
+                            Node::new_with_inner(layer_digest, InnerNode::Directory(DirectoryState::new_empty())),
                         );
                     }
                     let existing_node = &mut state
@@ -240,7 +240,7 @@ impl InnerNode {
                     let mut dir_state = DirectoryState::new_with_size(new_node.size());
                     dir_state.children.insert(
                         Path::new(component).into(),
-                        Node::new_with_node(
+                        Node::new_with_inner(
                             layer_digest,
                             InnerNode::Directory(DirectoryState::new_with_size(new_node.size())),
                         ),
@@ -270,7 +270,7 @@ impl InnerNode {
 
         state
             .children
-            .insert(node_name.into(), Node::new_with_node(layer_digest, new_node));
+            .insert(node_name.into(), Node::new_with_inner(layer_digest, new_node));
 
         Ok(())
     }
@@ -286,7 +286,7 @@ impl InnerNode {
                     };
                     left_state
                         .children
-                        .insert(path, Node::new_with_node(right_node.updated_in, updated_node));
+                        .insert(path, Node::new_with_inner(right_node.updated_in, updated_node));
                 }
                 let new_state = match (&left_state.status, &right_state.status) {
                     (_, NodeStatus::Added(_)) => {

@@ -1,7 +1,8 @@
 use std::path::Path;
 
-/// A small helper struct that contains a [Path] and returns its individual components and
-/// can be restored to its original state if needed.
+/// A small helper struct that contains a [Path] and can iterate over its components without changing the underlying [Path] instance.
+///
+/// The contained [Path] can be restored to its original state if needed.
 #[derive(Clone)]
 pub(super) struct RestorablePathFilter<'a> {
     path: &'a Path,

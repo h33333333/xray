@@ -10,6 +10,7 @@ pub use inner_node::InnerNode;
 use iter::TreeIter;
 use util::RestorablePathFilter;
 
+/// A single node in a file tree.
 #[derive(Clone)]
 pub struct Node {
     /// A 0-based index of the layer in which this node was last updated.
@@ -28,33 +29,40 @@ impl Node {
         }
     }
 
-    pub fn new_with_node(updated_in: u8, node: InnerNode) -> Self {
+    pub fn new_with_inner(updated_in: u8, node: InnerNode) -> Self {
         Node {
             updated_in,
             inner: node,
         }
     }
 
+    /// Inserts a new [InnerNode] at the provided path and updates the layer in which this node was last updated.
     pub fn insert(&mut self, path: impl AsRef<Path>, new_node: InnerNode, layer_digest: u8) -> anyhow::Result<()> {
         self.updated_in = layer_digest;
         self.inner.insert(path, new_node, layer_digest)
     }
 
+    /// Merges two [Nodes](Node).
     pub fn merge(mut self, other: Self) -> Self {
         self.updated_in = other.updated_in;
         self.inner = self.inner.merge(other.inner, other.updated_in);
         self
     }
 
+    /// Applies the provided filter to this node.
+    ///
+    /// Returns true if there are any nodes left in the tree after filtering.
     pub fn filter(&mut self, mut filter: NodeFilters) -> bool {
         filter.strip_path_filter_prefix();
         self.inner.filter(filter)
     }
 
+    /// Creates a new [iterator](TreeIter).
     pub fn iter(&self) -> TreeIter<'_> {
         TreeIter::new(self, false)
     }
 
+    /// Creates a new [iterator](TreeIter) that also tracks active depth levels that are used when rendering the UI.
     pub fn iter_with_levels(&self) -> TreeIter<'_> {
         TreeIter::new(self, true)
     }

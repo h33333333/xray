@@ -3,13 +3,26 @@ use std::path::Path;
 
 use super::Node;
 
+/// An iterator over [nodes](Node) of a file tree.
 pub struct TreeIter<'a> {
+    /// A queue of items that this iterator needs to process.
     queue: VecDeque<(&'a Node, &'a Path, usize)>,
+    /// If present, tracks active depth levels (i.e. when a node is a children of a node that has siblings after it).
+    ///
+    /// This is used mostly during rendering the file tree to determine the correct branch prefixes and indicators for a node.
     active_levels: Option<HashSet<usize>>,
 }
 
 impl<'a> TreeIter<'a> {
-    pub fn new(tree: &'a Node, track_levels: bool) -> Self {
+    /// Mimics the `enumerate` method on most iterators and turns this iterator instance into a [EnumeratedNodeIter].
+    pub fn enumerate(self) -> EnumeratedNodeIter<'a> {
+        EnumeratedNodeIter::new(self)
+    }
+
+    /// Creates a new iterator.
+    ///
+    /// Pass `true` as the second parameter if you want this instance to track the active depth levels as well.
+    pub(super) fn new(tree: &'a Node, track_levels: bool) -> Self {
         let mut queue = VecDeque::new();
         queue.push_back((tree, Path::new("."), 0));
         TreeIter {
@@ -18,12 +31,8 @@ impl<'a> TreeIter<'a> {
         }
     }
 
-    pub fn is_level_active(&self, level: usize) -> Option<bool> {
+    pub(super) fn is_level_active(&self, level: usize) -> Option<bool> {
         self.active_levels.as_ref().map(|levels| levels.contains(&level))
-    }
-
-    pub fn enumerate(self) -> EnumeratedNodeIter<'a> {
-        EnumeratedNodeIter::new(self)
     }
 }
 
@@ -58,6 +67,7 @@ impl<'a> Iterator for TreeIter<'a> {
     }
 }
 
+/// Mimics the [std::iter::Enumerate] iterator but also allows getting information about the active depth levels.
 pub struct EnumeratedNodeIter<'a> {
     inner: TreeIter<'a>,
     count: usize,
@@ -68,6 +78,7 @@ impl<'a> EnumeratedNodeIter<'a> {
         EnumeratedNodeIter { inner, count: 0 }
     }
 
+    /// Returns `true` if the provided depth level is active (i.e. still has nodes after the current one).
     pub fn is_level_active(&self, level: usize) -> Option<bool> {
         self.inner.is_level_active(level)
     }
