@@ -20,7 +20,7 @@ use constants::{
 use indexmap::IndexMap;
 use json::{ImageHistory, ImageLayerConfigs, JsonBlob, Manifest};
 pub use node::NodeFilters;
-use node::{InnerNode, Node};
+use node::{InnerNode, Node, RestorablePath};
 use serde::de::DeserializeOwned;
 use tar::{Archive, Header};
 use util::{determine_blob_type, get_entry_size_in_blocks, sha256_digest_from_hex};
@@ -290,8 +290,13 @@ impl Parser {
             layer_size += node_size;
 
             change_set
-                // We will set the actual layer idx later in [Self::finalize]
-                .insert(node_path, node, 0)
+                .insert(
+                    // Use a restorable path here to simplify the further processing
+                    &mut RestorablePath::new(&node_path),
+                    node,
+                    // We will set the actual layer idx later in [Self::finalize], as we don't know it yet.
+                    0,
+                )
                 .context("failed to insert an entry")?;
         }
 

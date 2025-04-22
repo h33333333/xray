@@ -3,12 +3,10 @@ mod inner_node;
 mod iter;
 mod util;
 
-use std::path::Path;
-
 pub use filter::NodeFilters;
 pub use inner_node::InnerNode;
 use iter::TreeIter;
-use util::RestorablePathFilter;
+pub(super) use util::RestorablePath;
 
 /// A single node in a file tree.
 #[derive(Clone)]
@@ -37,7 +35,12 @@ impl Node {
     }
 
     /// Inserts a new [InnerNode] at the provided path and updates the layer in which this node was last updated.
-    pub fn insert(&mut self, path: impl AsRef<Path>, new_node: InnerNode, layer_digest: u8) -> anyhow::Result<()> {
+    pub fn insert(
+        &mut self,
+        path: &mut RestorablePath<'_>,
+        new_node: InnerNode,
+        layer_digest: u8,
+    ) -> anyhow::Result<()> {
         self.updated_in = layer_digest;
         self.inner.insert(path, new_node, layer_digest)
     }

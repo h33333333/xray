@@ -3,7 +3,7 @@ use std::path::Path;
 
 use regex::Regex;
 
-use super::RestorablePathFilter;
+use super::RestorablePath;
 
 /// Contains all filters that can be applied to file tree [Nodes](super::Node).
 #[derive(Default)]
@@ -11,7 +11,7 @@ pub struct NodeFilters<'a, 'r> {
     /// A standard path filter.
     ///
     /// Suppots both relative and absolute paths.
-    pub(super) path_filter: Option<RestorablePathFilter<'a>>,
+    pub(super) path_filter: Option<RestorablePath<'a>>,
     /// Won't display size whose size is lower than the specified number of bytes.
     pub(super) node_size_filter: Option<u64>,
     /// A path filter that uses regular expressions.
@@ -22,7 +22,7 @@ impl<'a, 'r> NodeFilters<'a, 'r> {
     /// Adds a path filter and returns a new instance.
     pub fn with_path_filter<'n>(self, filter: &'n Path) -> NodeFilters<'n, 'r> {
         NodeFilters {
-            path_filter: Some(RestorablePathFilter::new(filter)),
+            path_filter: Some(RestorablePath::new(filter)),
             node_size_filter: self.node_size_filter,
             path_regex: None,
         }
