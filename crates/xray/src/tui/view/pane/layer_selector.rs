@@ -6,7 +6,7 @@ use super::style::layer_status_indicator_style;
 use crate::parser::{Layer, LayerChangeSet, Sha256Digest};
 use crate::tui::action::Direction;
 use crate::tui::store::AppState;
-use crate::tui::util::bytes_to_human_readable_units;
+use crate::tui::util::Unit;
 use crate::tui::view::SideEffect;
 
 const LAYER_STATUS_INDICATOR_LEN: usize = 2;
@@ -72,7 +72,7 @@ impl LayerSelectorPane {
             // Always keep the selected layer visible
             .skip((self.selected_layer_idx + 1).saturating_sub(Into::<usize>::into(visible_rows)))
             .map(|(idx, (_, layer))| {
-                let (layer_size, unit) = bytes_to_human_readable_units(layer.size);
+                let (layer_size, unit) = Unit::bytes_to_human_readable_units(layer.size);
                 let created_by = if layer.created_by.len() > cols_for_created_by {
                     let (start, end) = if self.scroll_offset + cols_for_created_by >= layer.created_by.len() {
                         (layer.created_by.len() - cols_for_created_by, layer.created_by.len())

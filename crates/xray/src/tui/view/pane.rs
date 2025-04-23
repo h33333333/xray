@@ -188,7 +188,7 @@ impl Pane {
             }) => Some(match active_field {
                 ImageInfoField::Repository => image_name.as_ref().into(),
                 ImageInfoField::Tag => tag.as_ref().into(),
-                ImageInfoField::Size => size.string_representation().into(),
+                ImageInfoField::Size => size.as_ref().into(),
                 ImageInfoField::Architecture => architecture.into(),
                 ImageInfoField::Os => os.into(),
             }),

@@ -1,8 +1,9 @@
 use std::borrow::Cow;
+use std::ops::Deref;
 
 use super::util::{Field, FieldKey};
 use crate::tui::action::Direction;
-use crate::tui::util::{bytes_to_human_readable_units, ValueWithStringRepresentation};
+use crate::tui::util::{Unit, ValueWithStringRepresentation};
 use crate::{render_order_enum, sort_fields_by_render_order};
 
 render_order_enum!(ImageInfoField, Repository, Tag, Size, Architecture, Os);
@@ -50,7 +51,7 @@ impl ImageInfoPane {
     }
 
     pub fn get_fields(&self) -> [Field<'_, ImageInfoField>; 5] {
-        let (image_size, unit) = bytes_to_human_readable_units(*self.size.value());
+        let (image_size, unit) = Unit::bytes_to_human_readable_units(*self.size.deref());
         let mut fields = [
             (ImageInfoField::Repository, self.image_name.as_ref().into()),
             (ImageInfoField::Tag, self.tag.as_ref().into()),

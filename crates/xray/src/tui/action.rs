@@ -1,3 +1,4 @@
+/// Represents a single action triggered by the user or the app itself.
 #[derive(Debug, Clone)]
 pub enum AppAction {
     /// An empty action that doesn't lead to any change in the app's state.
@@ -27,12 +28,12 @@ pub enum AppAction {
     InputDeleteCharacter,
     /// User pasted a string while in the "insert" mode.
     InputPaste(String),
-    /// Scroll horizontally in the specified [ScrollDirection] within the currently selected [super::view::Pane].
+    /// Scroll horizontally in the specified [Direction] within the currently selected [super::view::Pane].
     Scroll(Direction),
 }
 
-#[derive(Debug, Default, Clone, Copy)]
 /// Represents a direction in which the user wants to [AppAction::Move] or [AppAction::Scroll].
+#[derive(Debug, Default, Clone, Copy)]
 pub enum Direction {
     #[default]
     Forward,

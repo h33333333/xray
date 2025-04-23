@@ -82,8 +82,7 @@ impl View<AppState> for App {
 /// This function also renders the command bar below the main panes and
 /// the help popup if it's currently visible.
 fn render(frame: &mut Frame, state: &AppState) -> anyhow::Result<()> {
-    // Panes are always sorted by the render order, so we can just zip rects and panes here,
-    // as the order won't change during runtime.
+    // Render main panes
     for (pane, pane_area) in state.panes.iter() {
         frame.render_widget(
             pane.as_ref()
@@ -94,11 +93,13 @@ fn render(frame: &mut Frame, state: &AppState) -> anyhow::Result<()> {
         );
     }
 
+    // Render the command bar
     frame.render_widget(
         CommandBar::render(state).context("failed to redner the command bar")?,
         state.command_bar_area,
     );
 
+    // Render the help popup if it's active
     if state.show_help_popup {
         let popup_area = popup_area(frame.area(), None, None);
         clear_area(frame, popup_area);
@@ -114,9 +115,9 @@ fn render(frame: &mut Frame, state: &AppState) -> anyhow::Result<()> {
 /// Returns a [Rect] that can be used to show a centered popup.
 fn popup_area(area: Rect, vertical_constraint: Option<Constraint>, horizontal_constraint: Option<Constraint>) -> Rect {
     let vertical = Layout::vertical([vertical_constraint.unwrap_or(Constraint::Percentage(35))]).flex(Flex::Center);
+    let [area] = vertical.areas(area);
     let horizontal =
         Layout::horizontal([horizontal_constraint.unwrap_or(Constraint::Percentage(35))]).flex(Flex::Center);
-    let [area] = vertical.areas(area);
     let [area] = horizontal.areas(area);
     area
 }

@@ -3,7 +3,7 @@ use std::io::BufReader;
 use std::path::Path;
 
 use anyhow::Context;
-use xray::{init_app_dispatcher, init_logging, run, Config, Parser};
+use xray::{init_logging, AppDispatcher, Config, Parser};
 
 fn main() -> anyhow::Result<()> {
     let config = Config::new()?;
@@ -20,5 +20,8 @@ fn main() -> anyhow::Result<()> {
         anyhow::bail!("Got an image with zero layers, nothing to inspect here")
     }
 
-    run(init_app_dispatcher(image).context("failed to initialize the app")?).context("error during execution")
+    AppDispatcher::init(image)
+        .context("failed to initialize the app")?
+        .run_until_stopped()
+        .context("error during execution")
 }

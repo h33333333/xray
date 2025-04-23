@@ -9,7 +9,7 @@ use super::filter_popup::FilterPopup;
 use crate::parser::LayerChangeSet;
 use crate::tui::action::Direction;
 use crate::tui::store::AppState;
-use crate::tui::util::bytes_to_human_readable_units;
+use crate::tui::util::Unit;
 
 const BRANCH_INDICATOR_LENGTH: usize = 4;
 const BRANCH_INDICATOR: &str = "│   ";
@@ -73,7 +73,7 @@ impl LayerInspectorPane {
                 }
             }
 
-            let (node_size, unit) = bytes_to_human_readable_units(node.inner.size());
+            let (node_size, unit) = Unit::bytes_to_human_readable_units(node.inner.size());
             let node_is_active = idx == current_node_idx && !self.is_showing_filter_popup;
 
             let mut node_tree_branch = String::with_capacity((depth - 1) * BRANCH_INDICATOR_LENGTH);

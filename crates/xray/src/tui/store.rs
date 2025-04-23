@@ -18,6 +18,7 @@ pub trait Store {
     fn handle(&mut self, action: Self::Action) -> anyhow::Result<()>;
 }
 
+/// Holds all the state that the app needs during execution.
 pub struct AppState {
     /// All the [Panes](Pane) with their corresponding [rendering areas](Rect) sorted by their render order.
     ///
@@ -35,7 +36,7 @@ pub struct AppState {
     pub layers: IndexMap<Sha256Digest, Layer>,
     /// Whether the help popup is currently shown in the UI.
     pub show_help_popup: bool,
-    /// Whether the UI is currently in the "insert" mode (i.e. allows free text input).
+    /// Whether the UI is currently in the "insert" mode (i.e. allows unrestricted text input).
     pub is_in_insert_mode: bool,
 }
 
@@ -83,6 +84,7 @@ impl AppState {
         }
     }
 
+    /// Returns a reference to the currently selected [Pane].
     fn get_active_pane(&self) -> anyhow::Result<&Pane> {
         self.panes
             .get(Into::<usize>::into(self.active_pane))
@@ -90,6 +92,7 @@ impl AppState {
             .with_context(|| format!("bug: pane {:?} is no longer at its expected place", self.active_pane))
     }
 
+    /// Returns a mutable reference to the currently selected [Pane].
     fn get_active_pane_mut(&mut self) -> anyhow::Result<&mut Pane> {
         self.panes
             .get_mut(Into::<usize>::into(self.active_pane))
@@ -97,6 +100,7 @@ impl AppState {
             .with_context(|| format!("bug: pane {:?} is no longer at its expected place", self.active_pane))
     }
 
+    /// A hook that applies the filters to the current changeset and should be called whenever the aggregated layer changeset is updated.
     fn on_changeset_updated(&mut self) -> anyhow::Result<()> {
         let layer_inspector_pane_idx: usize = ActivePane::LayerInspector.into();
         let (layer_inspector_pane_opt, _) = &mut self.panes[layer_inspector_pane_idx];
@@ -120,6 +124,7 @@ impl AppState {
         Ok(())
     }
 
+    /// Applies a [SideEffect] produced while [handling](Store::handle) an [action](AppAction).
     fn apply_side_effect(&mut self, side_effect: SideEffect) -> anyhow::Result<()> {
         match side_effect {
             // Both side effects lead to the same actions and are handled by the same handler
@@ -145,7 +150,7 @@ impl Store for AppState {
                     "Each pane should have a corresponding rect that it will be rendered in"
                 );
 
-                // Update the area oof each pane
+                // Update the area of each pane
                 pane_areas
                     .into_iter()
                     .zip(self.panes.iter_mut())

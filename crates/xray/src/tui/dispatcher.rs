@@ -21,7 +21,7 @@ where
     S: Store,
     V: View<S>,
 {
-    /// Calls the [Dispatcher::store] to handle the provided [Action].
+    /// Calls [Store::handle] to handle the provided [Action].
     ///
     /// Also notifies the [Dispatcher::view] about the change so that it may update accordinglyfor.
     pub fn dispatch(&mut self, action: S::Action) -> anyhow::Result<()> {
@@ -31,8 +31,8 @@ where
             .context("failed to update the view with the latest data from the store")
     }
 
-    /// Returns a reference to the [store](S).
-    pub fn store(&self) -> &S {
+    /// Returns a reference to the [Store] of this dispatcher.
+    pub fn get_store(&self) -> &S {
         &self.store
     }
 }
