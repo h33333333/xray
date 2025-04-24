@@ -1,10 +1,17 @@
 use anyhow::Context as _;
+use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, BorderType, Paragraph, Widget, Wrap};
 
 use super::pane::{FIELD_KEY_STYLE, FIELD_VALUE_STYLE};
 use super::ActivePane;
 use crate::tui::store::AppState;
+
+const COLOR_GUIDE: &[(Color, &str)] = &[
+    (Color::LightGreen, "Added in the current layer"),
+    (Color::LightYellow, "Modified in the current layer"),
+    (Color::LightRed, "Deleted in the current layer"),
+];
 
 /// A simple help popup that displays all hotkeys and other useful information.
 pub struct HelpPopup {}
@@ -27,21 +34,10 @@ impl HelpPopup {
         // Make sure that the keys are sorted in the descending hotkey length order
         hotkeys.sort_by(|(hk_a, _), (hk_b, _)| hk_b.len().cmp(&hk_a.len()));
 
-        // We need this to pad shorter hotkeys and make the list look less ugly
-        let longest_hotkey = hotkeys
-            .iter()
-            .map(|(hotkey, _)| hotkey.len())
-            .max_by(|a, b| a.cmp(b))
-            .context("bug: vec with hotkeys is somehow empty")?;
-
-        let lines = hotkeys
-            .into_iter()
-            .map(|(hotkey, description)| {
-                Line::from(vec![
-                    Span::styled(format!("{:>longest_hotkey$}  ", hotkey), FIELD_KEY_STYLE),
-                    Span::styled(description, FIELD_VALUE_STYLE),
-                ])
-            })
+        let lines = format_color_guide_section()
+            // Add a separator between the color guide and hotkeys
+            .chain(chainable_blank_line())
+            .chain(format_hotkeys_section(hotkeys)?)
             .collect::<Vec<_>>();
 
         Ok(Paragraph::new(Text::from(lines))
@@ -50,30 +46,73 @@ impl HelpPopup {
     }
 }
 
-// FIXME: fix the hotkeys, add color guide (i.e. how does a deleted/modified/added file look like)
 fn get_common_hotkeys() -> Vec<(&'static str, &'static str)> {
     vec![
-        ("down, j", "Move cursor down"),
-        ("up, k", "Move cursor up"),
-        ("s-tab", "Select previous pane"),
-        ("tab", "Select next pane"),
-        ("q", "Exit from the app"),
-        ("1, 2, 3, 4", "Select the corresponding pane"),
+        ("down, j", "move cursor down"),
+        ("up, k", "move cursor up"),
+        ("s-tab", "select previous pane"),
+        ("tab", "select next pane"),
+        ("q", "exit the app"),
+        ("1, 2, 3, 4", "select the corresponding pane"),
     ]
 }
 
 fn get_hotkeys_for_active_pane(hotkeys: &mut Vec<(&'static str, &'static str)>, active_pane: ActivePane) {
     match active_pane {
         ActivePane::ImageInfo | ActivePane::LayerInfo => {
-            hotkeys.push(("y", "Copy the selected value to the clipboard"))
+            hotkeys.push(("y", "copy the selected value to the clipboard"))
         }
         ActivePane::LayerInspector => {
-            hotkeys.push(("enter, l", "Toggle the selected directory"));
-            hotkeys.push(("ctrl-f", "Show the filter popup"))
+            hotkeys.push(("enter, space", "toggle the selected directory"));
+            hotkeys.push(("ctrl-f", "show the filter popup"))
         }
         ActivePane::LayerSelector => {
-            hotkeys.push(("left, h", "Scroll left"));
-            hotkeys.push(("right, l", "Scroll right"));
+            hotkeys.push(("left, h", "scroll left"));
+            hotkeys.push(("right, l", "scroll right"));
         }
     }
+}
+
+fn format_hotkeys_section(
+    hotkeys: Vec<(&'static str, &'static str)>,
+) -> anyhow::Result<impl Iterator<Item = Line<'static>>> {
+    // We need this to pad shorter hotkeys and make the list look less ugly
+    let longest_hotkey = hotkeys
+        .iter()
+        .map(|(hotkey, _)| hotkey.len())
+        .max_by(|a, b| a.cmp(b))
+        .context("bug: vec with hotkeys is somehow empty")?;
+
+    Ok(
+        Some(Line::from(Span::styled("Hotkeys", FIELD_KEY_STYLE.italic())).centered())
+            .into_iter()
+            .chain(chainable_blank_line())
+            .chain(hotkeys.into_iter().map(move |(hotkey, description)| {
+                Line::from(vec![
+                    Span::styled(
+                        format!("{:>longest_hotkey$}  ", hotkey),
+                        // Make the hotkeys easier to see among the text
+                        FIELD_KEY_STYLE.fg(Color::LightBlue),
+                    ),
+                    Span::styled(description, FIELD_VALUE_STYLE),
+                ])
+            })),
+    )
+}
+
+fn format_color_guide_section() -> impl Iterator<Item = Line<'static>> {
+    Some(Line::from(Span::styled("Meaning of file tree colors", FIELD_KEY_STYLE.italic())).centered())
+        .into_iter()
+        .chain(chainable_blank_line())
+        .chain(COLOR_GUIDE.iter().map(|(color, description)| {
+            Line::from(vec![
+                Span::styled("   ", Style::new().bg(*color)),
+                Span::styled("  ", FIELD_VALUE_STYLE),
+                Span::styled(*description, FIELD_VALUE_STYLE),
+            ])
+        }))
+}
+
+fn chainable_blank_line() -> Option<Line<'static>> {
+    Some(Line::from(""))
 }
