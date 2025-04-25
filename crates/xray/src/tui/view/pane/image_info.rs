@@ -21,8 +21,8 @@ impl FieldKey for ImageInfoField {
     }
 }
 
-#[derive(Debug)]
 /// [super::Pane::ImageInfo] pane's state.
+#[derive(Debug)]
 pub struct ImageInfoPane {
     pub active_field: ImageInfoField,
     pub image_name: Cow<'static, str>,

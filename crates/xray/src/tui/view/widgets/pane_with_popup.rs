@@ -7,7 +7,7 @@ use crate::tui::view::popup_area;
 pub struct PaneWithPopup<W, P> {
     /// An optional pane that should be rendered.
     pane: Option<W>,
-    /// An optional popup that should be rendered along with its vertical and horizontal area [Constraint].
+    /// An optional popup along with its vertical and horizontal area [Constraint].
     popup: Option<(P, Option<Constraint>, Option<Constraint>)>,
 }
 

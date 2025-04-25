@@ -22,9 +22,16 @@ impl<'a> TreeIter<'a> {
     /// Creates a new iterator.
     ///
     /// Pass `true` as the second parameter if you want this instance to track the active depth levels as well.
-    pub(super) fn new(tree: &'a Node, track_levels: bool) -> Self {
+    pub(super) fn new(node: &'a Node, track_levels: bool) -> Self {
         let mut queue = VecDeque::new();
-        queue.push_back((tree, Path::new("."), 0));
+
+        if let Some(children) = node.inner.children() {
+            queue.extend(children.iter().map(|(path, node)| (node, path.as_ref(), 0)));
+        } else {
+            // The node tree consists of a single file node.
+            queue.push_back((node, Path::new("."), 0));
+        }
+
         TreeIter {
             queue,
             active_levels: track_levels.then(HashSet::new),

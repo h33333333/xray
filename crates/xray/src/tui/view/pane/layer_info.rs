@@ -21,8 +21,8 @@ impl FieldKey for LayerInfoField {
     }
 }
 
-#[derive(Debug, Default)]
 /// [super::Pane::LayerInfo] pane's state.
+#[derive(Debug, Default)]
 pub struct LayerInfoPane {
     pub active_field: LayerInfoField,
 }

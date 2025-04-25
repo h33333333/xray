@@ -28,15 +28,18 @@ pub struct LayerInspectorPane {
     collapsed_nodes_before_current: usize,
     /// Maps indexes of all nodes that are collapsed to the number of their children
     collapsed_nodes: BTreeMap<usize, usize>,
-    /// The filter popup state.
-    pub filter_popup: FilterPopup,
-    /// Whether we are showing the filter popup and are accepting the user's input.
-    pub is_showing_filter_popup: bool,
-    /// Current aggregated changeset with all user-selected filters applied.
+    /// The filter popup state
+    filter_popup: FilterPopup,
+    /// Whether we are showing the filter popup and are accepting the user's input
+    is_showing_filter_popup: bool,
+    /// Current aggregated changeset with all user-selected filters applied
     filtered_changeset: Option<(LayerChangeSet, usize)>,
 }
 
 impl LayerInspectorPane {
+    /// The main entrypoint for rendering this pane.
+    ///
+    /// It processes the current state and returns back the lines that should be rendered in the pane.
     pub fn changeset_to_lines<'a>(
         &self,
         changeset: &'a LayerChangeSet,
@@ -44,8 +47,6 @@ impl LayerInspectorPane {
         visible_rows: u16,
     ) -> anyhow::Result<Vec<Line<'a>>> {
         let mut lines = vec![];
-
-        let current_node_idx = self.current_node_idx + 1 /* skip the top-level element */;
 
         let visible_rows: usize = visible_rows.into();
         let nodes_to_skip = self.nodes_to_skip_before_current_node(visible_rows);
@@ -58,27 +59,24 @@ impl LayerInspectorPane {
         };
 
         let mut iter = changeset.iter_with_levels().enumerate();
-        // HACK: mimic the `Skip` combinator
-        iter.nth(nodes_to_skip);
+        if nodes_to_skip != 0 {
+            // HACK: mimic the `Skip` combinator
+            iter.nth(nodes_to_skip - 1 /* this requires a 0-based index */);
+        }
         'outer: while let Some((idx, (path, node, depth, level_is_active))) = iter.next() {
             // Check if any parent of this node is collapsed
-            for (node_idx, n_of_children) in self
-                .collapsed_nodes
-                .iter()
-                .take_while(|(&node_idx, _)| node_idx < idx - 1)
-            {
-                if node_idx + n_of_children >= idx - 1 {
+            for (node_idx, n_of_children) in self.collapsed_nodes.iter().take_while(|(&node_idx, _)| node_idx < idx) {
+                if node_idx + n_of_children >= idx {
                     // Some parent of this node is collapsed, don't render it
                     continue 'outer;
                 }
             }
 
             let (node_size, unit) = Unit::bytes_to_human_readable_units(node.inner.size());
-            let node_is_active = idx == current_node_idx && !self.is_showing_filter_popup;
+            let node_is_active = idx == self.current_node_idx && !self.is_showing_filter_popup;
 
-            let mut node_tree_branch = String::with_capacity((depth - 1) * BRANCH_INDICATOR_LENGTH);
-            // Skip the "." node
-            (1..depth).for_each(|depth| {
+            let mut node_tree_branch = String::with_capacity(depth * BRANCH_INDICATOR_LENGTH);
+            (0..depth).for_each(|depth| {
                 let prefix = if iter.is_level_active(depth).unwrap_or(false) {
                     BRANCH_INDICATOR
                 } else {
@@ -92,7 +90,7 @@ impl LayerInspectorPane {
             } else {
                 INACTIVE_LEVEL_PREFIX
             };
-            let status_prefix = if self.is_node_collapsed(idx - 1 /* account for the skipped "." node */) {
+            let status_prefix = if self.is_node_collapsed(idx) {
                 COLLAPSED_NODE_STATUS_INDICATOR
             } else {
                 EXPANDED_NODE_STATUS_INDICATOR
@@ -147,9 +145,10 @@ impl LayerInspectorPane {
         self.collapsed_nodes.clear();
     }
 
-    /// Updates [Self::filtered_changeset] by applying the active user-provided filters to the provided changeset.
+    /// Updates [Self::filtered_changeset] by applying the active user-provided filters to the contained changeset.
     pub fn filter_current_changeset(&mut self, changeset: &LayerChangeSet) {
         if !self.filter_popup.filters().any() {
+            // If there are no filters, simply reset the filtered changeset and do nothing else
             self.filtered_changeset = None;
             return;
         };
@@ -161,8 +160,10 @@ impl LayerInspectorPane {
         self.filtered_changeset = Some((filtered_changeset, n_of_nodes));
     }
 
+    /// Moves cursor to the next visible node inside the pane.
     pub fn move_within_pane(&mut self, direction: Direction, state: &AppState) -> anyhow::Result<()> {
         if self.is_showing_filter_popup {
+            // Apply this action to the filter popup if it's currently shown
             self.filter_popup.active_input.toggle(direction);
             return Ok(());
         }
@@ -174,16 +175,14 @@ impl LayerInspectorPane {
             state.get_aggregated_layers_changeset()?
         };
 
-        let total_nodes = total_nodes - 1 /* ignore the "." elemeent */;
-
         if total_nodes == 0 {
             return Ok(());
         }
 
         let n_of_current_node_child_nodes = self
-            .is_current_node_collapsed()
+            .is_node_collapsed(self.current_node_idx)
             .then(|| {
-                if let Some((_, (_, current_node, _, _))) = tree.iter().enumerate().nth(self.current_node_idx + 1) {
+                if let Some((_, (_, current_node, _, _))) = tree.iter().enumerate().nth(self.current_node_idx) {
                     current_node.inner.get_n_of_child_nodes()
                 } else {
                     tracing::debug!(
@@ -200,6 +199,7 @@ impl LayerInspectorPane {
                 let new_node_idx =
                     (self.current_node_idx + 1 + n_of_current_node_child_nodes.unwrap_or(0)) % total_nodes;
                 self.current_node_idx = new_node_idx;
+
                 let new_n_of_collapsed_nodes = if new_node_idx == 0 {
                     0
                 } else {
@@ -214,18 +214,23 @@ impl LayerInspectorPane {
                     .checked_sub(1)
                     .unwrap_or(total_nodes - 1 /* we need a zero-based index here */);
 
-                // Iterate starting from the topmost nodes and find the first node that is collapsed and that the calculated next node is the child of.
                 let mut collapsed_nodes_before_next_node = 0;
+                // Iterate starting from the topmost nodes and find the first node that is collapsed and that the calculated next node is the child of.
                 let mut iter = self.collapsed_nodes.iter().take_while(|(&idx, _)| idx < next_node_idx);
                 let mut next_item = iter.next();
                 while let Some((node_idx, n_of_children)) = next_item {
+                    // Check if the calculated next node is a child of the node we got on the current iteration
                     if node_idx + n_of_children >= next_node_idx {
                         // If we find such a node, jump to it instead of a node at the calculated index.
                         next_node_idx = *node_idx;
                         break;
                     }
+
+                    // Calculate the number of collapsed nodes before the the calculated next node
                     collapsed_nodes_before_next_node += n_of_children;
 
+                    // Find the next collapsed node that is either not a child of the node we got on the current iteration OR
+                    // contains the calculated next node
                     next_item = iter.find(|(&next_idx, &next_n_of_children)| {
                         next_idx > node_idx + n_of_children || next_idx + next_n_of_children >= next_node_idx
                     });
@@ -239,6 +244,9 @@ impl LayerInspectorPane {
         Ok(())
     }
 
+    /// Collapses the current directory OR changes the settings of the currently active filter (if one is shown).
+    ///
+    /// Does nothing if the current entry is a file.
     pub fn toggle_active_node(&mut self, state: &AppState) -> anyhow::Result<()> {
         if self.is_showing_filter_popup {
             self.filter_popup.toggle_active_input();
@@ -252,15 +260,14 @@ impl LayerInspectorPane {
             state.get_aggregated_layers_changeset()?
         };
 
-        // Ignore the top-level "." node
-        if total_nodes - 1 == 0 {
+        if total_nodes == 0 {
             return Ok(());
         }
 
         let (_, (_, current_node, _, _)) = tree
             .iter()
             .enumerate()
-            .nth(self.current_node_idx + 1)
+            .nth(self.current_node_idx)
             .context("bug: current node has invalid index")?;
 
         // Mark current directory as collapsed
@@ -277,45 +284,67 @@ impl LayerInspectorPane {
         Ok(())
     }
 
-    pub fn toggle_path_filter_input(&mut self) -> bool {
+    /// Toggles the filter popup.
+    pub fn toggle_filter_popup(&mut self) -> bool {
         self.is_showing_filter_popup = !self.is_showing_filter_popup;
         self.is_showing_filter_popup
     }
 
+    /// Appends to the currently active filter in the filter popup.
     pub fn append_to_filter(&mut self, input: char) {
         self.filter_popup.append_to_filter(input);
     }
 
+    /// Pops from the currently active filter in the filter popup.
     pub fn pop_from_filter(&mut self) {
         self.filter_popup.pop_from_filter();
     }
 
+    /// Returns a filter popup if it should be shown on the screen.
+    pub fn filter_popup(&self) -> Option<&FilterPopup> {
+        self.is_showing_filter_popup.then_some(&self.filter_popup)
+    }
+
+    /// Returns true if node at the provided index is currently collapsed.
     fn is_node_collapsed(&self, idx: usize) -> bool {
         self.collapsed_nodes.contains_key(&idx)
     }
 
-    fn is_current_node_collapsed(&self) -> bool {
-        self.is_node_collapsed(self.current_node_idx)
-    }
-
+    /// Returns that total number of nodes that should be skipped in order to fit the current node into the screen.
     fn nodes_to_skip_before_current_node(&self, visible_rows: usize) -> usize {
-        // Calculate nodes_to_skip adjusted for the collapsed directories
-        let mut nodes_to_skip =
-            (self.current_node_idx + 1 - self.collapsed_nodes_before_current).saturating_sub(visible_rows);
+        // Convert to zero-based index
+        let visible_space = visible_rows.saturating_sub(1);
+        // Calculate how many nodes we need to skip without accouting for any collapsed directories
+        let base_skip_count = self
+            .current_node_idx
+            .saturating_sub(self.collapsed_nodes_before_current + visible_space);
+
+        if base_skip_count == 0 {
+            // We don't need to skip any nodes
+            return 0;
+        }
+
+        // Now we need to adjust the skip count to account for collapsed directories
+        let mut adjusted_skip_count = base_skip_count;
 
         let mut iter = self
             .collapsed_nodes
             .iter()
             .take_while(|(&idx, _)| idx < self.current_node_idx);
         let mut next_item = iter.next();
-        while let Some((idx, children)) = next_item {
-            if (*idx + 1) <= nodes_to_skip {
-                nodes_to_skip += children;
+        while let Some((idx, n_of_children)) = next_item {
+            // We are interested in collapsed nodes that are within our adjusted skip range
+            if *idx >= adjusted_skip_count {
+                // We are not interested in the rest of the nodes, as they are outside the skip range
+                break;
             }
 
-            next_item = iter.find(|(&next_idx, _)| next_idx > idx + children);
+            // Adjust the skip count by the number of children of this node
+            adjusted_skip_count += n_of_children;
+            // Find the next node that is not a child of the current one
+            next_item = iter.find(|(&next_idx, _)| next_idx > idx + n_of_children);
         }
 
-        nodes_to_skip
+        adjusted_skip_count
     }
 }

@@ -119,7 +119,6 @@ impl Pane {
             Pane::LayerInspector(pane_state) => {
                 let (layer_changeset, _) = state.get_aggregated_layers_changeset()?;
                 let (_, _, current_layer_idx) = state.get_selected_layer()?;
-                let show_path_filter = pane_is_active && pane_state.is_showing_filter_popup;
 
                 let lines = pane_state
                     .changeset_to_lines(
@@ -147,8 +146,8 @@ impl Pane {
                     )
                     .context("layer inspector: failed to render a changeset")?;
 
-                if show_path_filter {
-                    let (popup, v_constraint, h_constraint) = pane_state.filter_popup.render_with_layout_constraints();
+                if let Some(filter_popup) = pane_state.filter_popup() {
+                    let (popup, v_constraint, h_constraint) = filter_popup.render_with_layout_constraints();
                     widget.set_popup((popup, Some(v_constraint), Some(h_constraint)));
                 }
 
@@ -229,7 +228,7 @@ impl Pane {
     pub fn toggle_input_mode(&mut self) -> (bool, Option<SideEffect>) {
         // Only the inspector pane supports this action for now.
         if let Pane::LayerInspector(pane_state) = self {
-            let input_is_active = pane_state.toggle_path_filter_input();
+            let input_is_active = pane_state.toggle_filter_popup();
             // Apply the filter only when user exits the input screen to avoid using a lot of resources for nothing
             let side_effect = (!input_is_active).then_some(SideEffect::FiltersUpdated);
             return (input_is_active, side_effect);
