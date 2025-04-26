@@ -62,7 +62,7 @@ impl AppState {
         let layer_selector_pane_idx: usize = ActivePane::LayerSelector.into();
         let (layer_selector_pane, _) = &self.panes[layer_selector_pane_idx];
         let selected_layer_idx = if let Some(Pane::LayerSelector(pane)) = layer_selector_pane {
-            pane.selected_layer().1
+            pane.selected_layer_idx()
         } else {
             anyhow::bail!("layer selector pane is no longer at the expected position in the UI");
         };
@@ -73,12 +73,12 @@ impl AppState {
         Ok((digest, layer, selected_layer_idx))
     }
 
-    /// Returns a reference to the aggregated [LayerChangeSet] of the currently selected layer and its parents.
+    /// Returns a reference to the aggregated [LayerChangeSet] of the currently selected layer and all the layers before it.
     pub fn get_aggregated_layers_changeset(&self) -> anyhow::Result<(&LayerChangeSet, usize)> {
         let layer_selector_pane_idx: usize = ActivePane::LayerSelector.into();
         let (layer_selector_pane, _) = &self.panes[layer_selector_pane_idx];
         if let Some(Pane::LayerSelector(pane)) = layer_selector_pane {
-            Ok(pane.selected_layers_changeset())
+            Ok(pane.aggregated_layers_changeset())
         } else {
             anyhow::bail!("layer selector pane is no longer at the expected position in the UI");
         }

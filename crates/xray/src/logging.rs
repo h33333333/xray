@@ -44,7 +44,7 @@ pub fn init_logging(config_folder: &Path) -> anyhow::Result<()> {
                 EnvFilter::builder()
                     .with_env_var(LOGGING_FILE_ENV)
                     .try_from_env()
-                    .unwrap_or_else(|_| format!("{}=info", env!("CARGO_CRATE_NAME")).into()),
+                    .unwrap_or_else(|_| format!("{}=trace", env!("CARGO_CRATE_NAME")).into()),
             ),
         )
         .try_init()

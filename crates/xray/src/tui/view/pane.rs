@@ -60,7 +60,12 @@ impl Pane {
         let pane_is_active = state.active_pane == self.into() && !state.show_help_popup;
 
         let text_color = text_color(pane_is_active);
-        let field_key_style = FIELD_KEY_STYLE.fg(text_color);
+        // Don't override the field key's fg color unless the pane is not active.
+        let field_key_style = if pane_is_active && FIELD_KEY_STYLE.fg.is_some() {
+            FIELD_KEY_STYLE
+        } else {
+            FIELD_KEY_STYLE.fg(text_color)
+        };
         let field_value_style = FIELD_VALUE_STYLE.fg(text_color);
         let active_field_style = ACTIVE_FIELD_STYLE.fg(text_color);
 
@@ -333,9 +338,8 @@ pub fn init_panes(image: &mut Image) -> anyhow::Result<[(Option<Pane>, Rect); 4]
         .max()
         .context("got an image with 0 layers")?;
 
-    let (digest, layer) = image.layers.get_index(0).context("got an image with 0 layers")?;
+    let (_, layer) = image.layers.get_index(0).context("got an image with 0 layers")?;
     let layer_selector_pane = Pane::LayerSelector(LayerSelectorPane::new(
-        *digest,
         0,
         layer.changeset.clone().unwrap_or(LayerChangeSet::new(0)),
         longest_layer_creation_command,

@@ -2,16 +2,25 @@ use std::cmp::Ordering;
 
 use ratatui::style::{Color, Modifier, Style};
 
+/// A style for a field's key (name).
 pub const FIELD_KEY_STYLE: Style = Style::new().add_modifier(Modifier::BOLD);
+/// A style for a field's value.
 pub const FIELD_VALUE_STYLE: Style = Style::new();
+/// A style of the currently selected field in case its parent pane is currently active.
 pub const ACTIVE_FIELD_STYLE: Style = Style::new().add_modifier(Modifier::UNDERLINED);
+/// A delimiter between the field's name and value.
 pub const FIELD_VALUE_DELIMITER: &str = ": ";
+
+/// A standard node that wasn't affected by changes in the currently selected layer.
 pub const ACTIVE_INSPECTOR_NODE_STYLE: Style = Style::new().fg(Color::Black).bg(Color::White);
+/// A style for a node that was added in the current layer.
 pub const ADDED_INSPECTOR_NODE_STYLE: Style = Style::new().fg(Color::LightGreen);
+/// A style for a node that was modified in the current layer.
 pub const MODIFIED_INSPECTOR_NODE_STYLE: Style = Style::new().fg(Color::LightYellow);
+/// A style for a node that was deleted in the current layer.
 pub const DELETED_INSPECTOR_NODE_STYLE: Style = Style::new().fg(Color::LightRed);
 
-/// Returns the [Color] of the text based on whether its parent [Pane](super::Pane) is active.
+/// Returns the text [Color] based on whether the [Pane](super::Pane) is active.
 pub fn text_color(pane_is_active: bool) -> Color {
     if pane_is_active {
         Color::White

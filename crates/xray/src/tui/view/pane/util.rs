@@ -33,7 +33,7 @@ pub fn fields_into_lines<'a, K: FieldKey>(
         .map(|(field_key, field_value)| {
             Line::from(vec![
                 Span::styled(field_key.name(), field_key_style),
-                Span::styled(FIELD_VALUE_DELIMITER, field_value_style),
+                Span::styled(FIELD_VALUE_DELIMITER, field_key_style),
                 Span::styled(field_value, field_value_style),
             ])
             .style(get_style_for_field(field_key))
