@@ -1,4 +1,5 @@
 #![feature(macro_metavar_expr)]
+#![forbid(unsafe_code)]
 
 mod logging;
 pub use logging::init_logging;

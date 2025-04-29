@@ -20,11 +20,11 @@ use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::block::Title;
 use ratatui::widgets::{Block, BorderType, Paragraph, Widget, Wrap};
-use style::{
-    text_color, ACTIVE_FIELD_STYLE, ACTIVE_INSPECTOR_NODE_STYLE, ADDED_INSPECTOR_NODE_STYLE,
-    DELETED_INSPECTOR_NODE_STYLE, MODIFIED_INSPECTOR_NODE_STYLE,
+use style::{text_color, ACTIVE_FIELD_STYLE, ACTIVE_INSPECTOR_NODE_STYLE};
+pub(super) use style::{
+    ADDED_INSPECTOR_NODE_STYLE, DELETED_INSPECTOR_NODE_STYLE, FIELD_KEY_STYLE, FIELD_VALUE_STYLE,
+    MODIFIED_INSPECTOR_NODE_STYLE,
 };
-pub(super) use style::{FIELD_KEY_STYLE, FIELD_VALUE_STYLE};
 use util::fields_into_lines;
 
 use super::widgets::PaneWithPopup;
@@ -282,7 +282,9 @@ impl Pane {
 
         // Only the inspector pane supports this action for now.
         if let Pane::LayerSelector(pane_state) = self {
-            pane_state.scroll(direction, pane_area)
+            pane_state
+                .scroll(direction, pane_area, state)
+                .context("error while scrolling the layer selector pane")?
         };
 
         Ok(())
@@ -331,18 +333,10 @@ pub fn init_panes(image: &mut Image) -> anyhow::Result<[(Option<Pane>, Rect); 4]
         std::mem::take(&mut image.os),
     ));
 
-    let longest_layer_creation_command = image
-        .layers
-        .iter()
-        .map(|(_, layer)| layer.created_by.len())
-        .max()
-        .context("got an image with 0 layers")?;
-
     let (_, layer) = image.layers.get_index(0).context("got an image with 0 layers")?;
     let layer_selector_pane = Pane::LayerSelector(LayerSelectorPane::new(
         0,
         layer.changeset.clone().unwrap_or(LayerChangeSet::new(0)),
-        longest_layer_creation_command,
     ));
     let layer_info_pane = Pane::LayerInfo(LayerInfoPane::default());
     let layer_inspector_pane = Pane::LayerInspector(LayerInspectorPane::default());

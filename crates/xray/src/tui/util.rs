@@ -1,5 +1,3 @@
-#![allow(unused_doc_comments)]
-
 use std::fmt::Write as _;
 
 use arboard::Clipboard;
@@ -45,7 +43,7 @@ impl<T> AsRef<str> for ValueWithStringRepresentation<T> {
     }
 }
 
-/// Represents the unit of a value.
+// Represents the unit of a value.
 render_order_enum!(Unit, Bytes, Kilobytes, Megabytes, Gigabytes);
 
 /// Represents a size unit.

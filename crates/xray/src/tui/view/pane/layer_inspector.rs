@@ -164,7 +164,7 @@ impl LayerInspectorPane {
     pub fn move_within_pane(&mut self, direction: Direction, state: &AppState) -> anyhow::Result<()> {
         if self.is_showing_filter_popup {
             // Apply this action to the filter popup if it's currently shown
-            self.filter_popup.active_input.toggle(direction);
+            self.filter_popup.active_filter_input.toggle(direction);
             return Ok(());
         }
 

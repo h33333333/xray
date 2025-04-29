@@ -20,13 +20,13 @@ const POPUP_PADDING: Padding = Padding {
 };
 
 render_order_enum!(FilterInput, PathFilter, SizeFilter);
-
 render_order_enum!(PathFilterKind, Regular, Regex);
 
+/// A filter popup used for inputting filters for the layer inspector pane.
 #[derive(Default, Debug)]
 pub struct FilterPopup {
     /// Currently active filter input
-    pub active_input: FilterInput,
+    pub active_filter_input: FilterInput,
     /// Path-based filter supplied by the user
     pub path_filter: String,
     /// Kind of the path filter
@@ -38,6 +38,7 @@ pub struct FilterPopup {
 }
 
 impl FilterPopup {
+    /// Returns a widget that can be rendered inside the layer inspector pane and its vertical and horizontal size constraints.
     pub fn render_with_layout_constraints(&self) -> (Paragraph<'_>, Constraint, Constraint) {
         let block = Block::bordered()
             .border_type(BorderType::Thick)
@@ -45,7 +46,7 @@ impl FilterPopup {
             .title(Line::from(self.title()).centered())
             .title_bottom(Line::from(self.keybindings()).centered());
 
-        let text = match self.active_input {
+        let text = match self.active_filter_input {
             FilterInput::PathFilter => Text::from(self.path_filter.as_str()),
             FilterInput::SizeFilter => Text::from(format!(
                 "{} {}",
@@ -61,8 +62,9 @@ impl FilterPopup {
         )
     }
 
+    /// Appends a single character to the currently active filter.
     pub fn append_to_filter(&mut self, input: char) {
-        match self.active_input {
+        match self.active_filter_input {
             FilterInput::PathFilter => self.path_filter.push(input),
             FilterInput::SizeFilter => {
                 if let Some(digit) = input.to_digit(10) {
@@ -72,8 +74,9 @@ impl FilterPopup {
         }
     }
 
+    /// Removes a single character/symbol from the active filter.
     pub fn pop_from_filter(&mut self) {
-        match self.active_input {
+        match self.active_filter_input {
             FilterInput::PathFilter => {
                 self.path_filter.pop();
             }
@@ -81,13 +84,15 @@ impl FilterPopup {
         };
     }
 
+    /// Changes settings of the currently active filter (doesn't change the filter itself).
     pub fn toggle_active_input(&mut self) {
-        match self.active_input {
+        match self.active_filter_input {
             FilterInput::PathFilter => self.path_filter_kind.toggle(Direction::Forward),
             FilterInput::SizeFilter => self.size_filter_units.toggle(Direction::Forward),
         }
     }
 
+    /// Returns a [NodeFilters] instance created using this popup's data.
     pub fn filters(&self) -> NodeFilters<'_, '_> {
         let mut filter = NodeFilters::default().with_size_filter(self.size_filter_in_units());
 
@@ -103,21 +108,25 @@ impl FilterPopup {
         filter
     }
 
+    /// Resets this popup's state to the default (empty) state.
     pub fn reset(&mut self) {
         self.path_filter.clear();
         self.node_size_filter = 0;
     }
 
+    /// Returns the currently inputted node size filter converted to bytes from the selected size units.
     fn size_filter_in_units(&self) -> u64 {
         self.size_filter_units.scale_to_units(self.node_size_filter)
     }
 
+    /// Returns a [Regex] created from the inputted path filter or [Option::None] if any error was encountered.
     fn path_regex(&self) -> Option<Cow<'static, Regex>> {
         Regex::new(&self.path_filter).ok().map(Cow::Owned)
     }
 
+    /// Returns title for the currently active filter.
     fn title(&self) -> &'static str {
-        match self.active_input {
+        match self.active_filter_input {
             FilterInput::PathFilter => match self.path_filter_kind {
                 PathFilterKind::Regular => "  Path Filter  ",
                 PathFilterKind::Regex => "  Path Filter (RegEx)  ",
@@ -126,6 +135,7 @@ impl FilterPopup {
         }
     }
 
+    /// Returns a [Vec] of keybindings to be rendered at the bottom of the popup.
     fn keybindings(&self) -> Vec<Span> {
         let mut keybindings = vec![
             // Padding
@@ -146,8 +156,9 @@ impl FilterPopup {
             keybindings.push(Span::styled(description, Style::new().fg(Color::Gray)));
         };
 
-        add_new_keybinding("[s-]tab", "toggle filter");
-        match self.active_input {
+        add_new_keybinding("tab", "toggle filter");
+
+        match self.active_filter_input {
             FilterInput::PathFilter => add_new_keybinding("ctrl-l", "toggle filter kind"),
             FilterInput::SizeFilter => add_new_keybinding("ctrl-l", "toggle size units"),
         }

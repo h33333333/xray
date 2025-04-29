@@ -3,14 +3,26 @@ use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, BorderType, Paragraph, Widget, Wrap};
 
-use super::pane::{FIELD_KEY_STYLE, FIELD_VALUE_STYLE};
+use super::pane::{
+    ADDED_INSPECTOR_NODE_STYLE, DELETED_INSPECTOR_NODE_STYLE, FIELD_KEY_STYLE, FIELD_VALUE_STYLE,
+    MODIFIED_INSPECTOR_NODE_STYLE,
+};
 use super::ActivePane;
 use crate::tui::store::AppState;
 
 const COLOR_GUIDE: &[(Color, &str)] = &[
-    (Color::LightGreen, "Added in the current layer"),
-    (Color::LightYellow, "Modified in the current layer"),
-    (Color::LightRed, "Deleted in the current layer"),
+    (
+        ADDED_INSPECTOR_NODE_STYLE.fg.expect("should be present"),
+        "Added in the current layer",
+    ),
+    (
+        MODIFIED_INSPECTOR_NODE_STYLE.fg.expect("should be present"),
+        "Modified in the current layer",
+    ),
+    (
+        DELETED_INSPECTOR_NODE_STYLE.fg.expect("should be present"),
+        "Deleted in the current layer",
+    ),
 ];
 
 /// A simple help popup that displays all hotkeys and other useful information.
@@ -46,6 +58,7 @@ impl HelpPopup {
     }
 }
 
+/// Returns hotkeys that are common to all panes.
 fn get_common_hotkeys() -> Vec<(&'static str, &'static str)> {
     vec![
         ("down, j", "move cursor down"),
@@ -57,6 +70,7 @@ fn get_common_hotkeys() -> Vec<(&'static str, &'static str)> {
     ]
 }
 
+/// Returns contextualized hotkeys that are relevant to the provided [ActivePane].
 fn get_hotkeys_for_active_pane(hotkeys: &mut Vec<(&'static str, &'static str)>, active_pane: ActivePane) {
     match active_pane {
         ActivePane::ImageInfo | ActivePane::LayerInfo => {
@@ -73,6 +87,7 @@ fn get_hotkeys_for_active_pane(hotkeys: &mut Vec<(&'static str, &'static str)>, 
     }
 }
 
+/// Formats the "hotkeys" section in the help popup.
 fn format_hotkeys_section(
     hotkeys: Vec<(&'static str, &'static str)>,
 ) -> anyhow::Result<impl Iterator<Item = Line<'static>>> {
@@ -100,6 +115,7 @@ fn format_hotkeys_section(
     )
 }
 
+/// Formats the color guide section in the help popup.
 fn format_color_guide_section() -> impl Iterator<Item = Line<'static>> {
     Some(Line::from(Span::styled("Meaning of file tree colors", FIELD_KEY_STYLE.italic())).centered())
         .into_iter()
@@ -113,6 +129,7 @@ fn format_color_guide_section() -> impl Iterator<Item = Line<'static>> {
         }))
 }
 
+/// Returns an empty [Line] that can be chained in iterators to create breaks between widgets.
 fn chainable_blank_line() -> Option<Line<'static>> {
     Some(Line::from(""))
 }

@@ -28,19 +28,16 @@ pub struct LayerSelectorPane {
     ///
     /// The second value is the total number of entries (both files and directories) in this changeset.
     aggregated_layers_changeset: (LayerChangeSet, usize),
-    /// Stores the longest layer creation command ([Layer::created_by]) from all layers in the current image.
-    longest_layer_creation_command: usize,
     /// Current horizontal scroll offset
     scroll_offset: usize,
 }
 
 impl LayerSelectorPane {
-    pub fn new(idx: usize, changeset: LayerChangeSet, longest_layer_creation_command: usize) -> Self {
+    pub fn new(idx: usize, changeset: LayerChangeSet) -> Self {
         let changeset_size = changeset.iter().count();
         LayerSelectorPane {
             selected_layer_idx: idx,
             aggregated_layers_changeset: (changeset, changeset_size),
-            longest_layer_creation_command,
             scroll_offset: 0,
         }
     }
@@ -76,17 +73,22 @@ impl LayerSelectorPane {
             .map(|(idx, (_, layer))| {
                 let is_selected_layer = idx == self.selected_layer_idx;
                 let (layer_size, unit) = Unit::bytes_to_human_readable_units(layer.size);
-                let (created_by, is_scrollable_to_right) =
-                    if is_selected_layer && layer.created_by.len() > cols_for_created_by {
-                        let (start, end) = if self.scroll_offset + cols_for_created_by >= layer.created_by.len() {
-                            (layer.created_by.len() - cols_for_created_by, layer.created_by.len())
-                        } else {
-                            (self.scroll_offset, self.scroll_offset + cols_for_created_by)
-                        };
-                        (&layer.created_by[start..end], end != layer.created_by.len())
-                    } else {
-                        (layer.created_by.as_ref(), false)
+                let (created_by, is_scrollable_to_right) = if layer.created_by.len() > cols_for_created_by {
+                    let mut start = 0;
+                    let mut end = cols_for_created_by;
+
+                    if is_selected_layer && self.scroll_offset + cols_for_created_by >= layer.created_by.len() {
+                        start = layer.created_by.len() - cols_for_created_by;
+                        end = layer.created_by.len();
+                    } else if is_selected_layer {
+                        start = self.scroll_offset;
+                        end = self.scroll_offset + cols_for_created_by;
                     };
+
+                    (&layer.created_by[start..end], end != layer.created_by.len())
+                } else {
+                    (layer.created_by.as_ref(), false)
+                };
 
                 let left_scrollable_indicator =
                     if is_selected_layer && self.scroll_offset != 0 && layer.created_by.len() > cols_for_created_by {
@@ -166,12 +168,21 @@ impl LayerSelectorPane {
         Ok(Some(SideEffect::ChangesetUpdated))
     }
 
-    pub fn scroll(&mut self, direction: Direction, pane_area: (u16, u16)) {
+    /// Scrolls the currently selected pane entry horizontally in the specified direction.
+    ///
+    /// Requires providing the pane area to correctly cap the scroll.
+    pub fn scroll(&mut self, direction: Direction, pane_area: (u16, u16), state: &AppState) -> anyhow::Result<()> {
         // How many columns are left to display the command that created the layer
         let cols_for_created_by = Into::<usize>::into(pane_area.0) - LAYER_INFO_FIXED_LEN - LAYER_STATUS_INDICATOR_LEN - 2 /* borders */;
 
-        let cap = if self.longest_layer_creation_command > cols_for_created_by {
-            self.longest_layer_creation_command - cols_for_created_by + 1 /* show the last character */
+        let (_, current_layer) = state
+            .layers
+            .get_index(self.selected_layer_idx)
+            .context("bug: selected layer idx is invalid")?;
+        let layer_creation_cmd_len = current_layer.created_by.len();
+
+        let cap = if layer_creation_cmd_len > cols_for_created_by {
+            layer_creation_cmd_len - cols_for_created_by + 1 /* show the last character */
         } else {
             1
         };
@@ -180,5 +191,7 @@ impl LayerSelectorPane {
             Direction::Forward => (self.scroll_offset + 1) % cap,
             Direction::Backward => self.scroll_offset.saturating_sub(1),
         };
+
+        Ok(())
     }
 }

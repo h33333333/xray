@@ -38,11 +38,24 @@ impl AppDispatcher {
             match event {
                 // Re-render the interface when terminal window is resized
                 Event::Resize(h, v) => self.dispatch(AppAction::Empty((h, v)))?,
-                // If we are in the insert mode, we ignore all hotkeys except 'Enter' and 'CTRL-C'
+                // Quit
+                Event::Key(event)
+                    if (event.code == KeyCode::Char('q') && !store.is_in_insert_mode)
+                        || (event.code == KeyCode::Char('c') && event.modifiers.intersects(KeyModifiers::CONTROL)) =>
+                {
+                    if store.show_help_popup && event.code == KeyCode::Char('q') {
+                        // Allow the users to close the help popup on `q` and don't exit the app in this case.
+                        self.dispatch(AppAction::ToggleHelpPane)?;
+                        continue;
+                    }
+
+                    break Ok(());
+                }
+                // If we are in the insert mode, we allow the free text input and handle only a small subset of hotkeys (like `CTRL-L` or `Enter`)
                 Event::Key(event) if store.is_in_insert_mode => {
                     if event.code == KeyCode::Enter
                         || event.code == KeyCode::Esc
-                        || (event.code == KeyCode::Char('c') && event.modifiers.intersects(KeyModifiers::CONTROL))
+                        || (event.code == KeyCode::Char('f') && event.modifiers.intersects(KeyModifiers::CONTROL))
                     {
                         self.dispatch(AppAction::ToggleInputMode)?;
                         continue;
@@ -76,13 +89,6 @@ impl AppDispatcher {
                         };
                         self.dispatch(AppAction::InputCharacter(input))?;
                     }
-                }
-                // Quit
-                Event::Key(event)
-                    if event.code == KeyCode::Char('q')
-                        || (event.code == KeyCode::Char('c') && event.modifiers.intersects(KeyModifiers::CONTROL)) =>
-                {
-                    break Ok(());
                 }
                 // Select next pane
                 Event::Key(event) if event.code == KeyCode::Tab => {
