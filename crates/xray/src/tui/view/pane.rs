@@ -36,7 +36,7 @@ use crate::tui::util::encode_hex;
 
 /// All panes that exist in the app.
 ///
-/// Each variant can also hold all the state that a particular pane needs, as
+/// Each variant also holds all the state that a particular pane needs, as
 /// these variants are created once during the app initialization and are then reused.
 pub enum Pane {
     /// Contains all image-related information from [crate::parser::Image].
@@ -77,7 +77,7 @@ impl Pane {
         let mut widget = PaneWithPopup::<Paragraph, Paragraph>::new(None, None);
 
         let block = self.get_styled_block(pane_is_active);
-        match self {
+        let pane_widget = match self {
             Pane::ImageInfo(pane_state) => {
                 let lines = fields_into_lines(
                     pane_state.get_fields(),
@@ -92,12 +92,12 @@ impl Pane {
                     },
                 );
 
-                widget.set_pane(Paragraph::new(Text::from(lines)).block(block));
+                Paragraph::new(Text::from(lines)).block(block)
             }
             Pane::LayerSelector(pane_state) => {
                 let lines = pane_state.lines(state.layers.iter(), field_value_style, remaining_rows, remaining_cols);
 
-                widget.set_pane(Paragraph::new(Text::from(lines)).block(block));
+                Paragraph::new(Text::from(lines)).block(block)
             }
             Pane::LayerInfo(pane_state) => {
                 let (selected_layer_digest, selected_layer, _) = state
@@ -119,7 +119,7 @@ impl Pane {
 
                 // FIXME: add a vertical scroll
                 // - this requires doing wrap manually, as there is no way to know how many lines will the wrapped text take
-                widget.set_pane(Paragraph::new(Text::from(lines)).wrap(Wrap { trim: true }).block(block));
+                Paragraph::new(Text::from(lines)).wrap(Wrap { trim: true }).block(block)
             }
             Pane::LayerInspector(pane_state) => {
                 let (layer_changeset, _) = state.get_aggregated_layers_changeset()?;
@@ -133,9 +133,8 @@ impl Pane {
                                 return field_value_style;
                             }
                             if node_is_active {
-                                // Underlining doesn't look that good in the file tree, so just use a standard BoW outline
                                 ACTIVE_INSPECTOR_NODE_STYLE
-                            } else if node_updated_in == current_layer_idx as u8 {
+                            } else if node_updated_in == current_layer_idx as u8 && current_layer_idx != 0 {
                                 if node_is_deleted {
                                     DELETED_INSPECTOR_NODE_STYLE
                                 } else if node_is_modified {
@@ -157,9 +156,11 @@ impl Pane {
                 }
 
                 // FIXME: add a horizontal scroll
-                widget.set_pane(Paragraph::new(Text::from(lines)).block(block));
+                Paragraph::new(Text::from(lines)).block(block)
             }
-        }
+        };
+
+        widget.set_pane(pane_widget);
         Ok(widget)
     }
 
@@ -324,6 +325,7 @@ impl Pane {
     }
 }
 
+/// Initializes all panes from the provided [Image].
 pub fn init_panes(image: &mut Image) -> anyhow::Result<[(Option<Pane>, Rect); 4]> {
     let image_info_pane = Pane::ImageInfo(ImageInfoPane::new(
         std::mem::take(&mut image.image_name),
