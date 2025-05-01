@@ -101,7 +101,7 @@ fn render(frame: &mut Frame, state: &AppState) -> anyhow::Result<()> {
 
     // Render the help popup if it's active
     if state.show_help_popup {
-        let popup_area = popup_area(frame.area(), None, None);
+        let popup_area = popup_area(frame.area(), Some(Constraint::Length(22)), Some(Constraint::Length(75)));
         clear_area(frame, popup_area);
         frame.render_widget(
             HelpPopup::render(state).context("failed to render the help popup")?,
@@ -113,11 +113,14 @@ fn render(frame: &mut Frame, state: &AppState) -> anyhow::Result<()> {
 }
 
 /// Returns a [Rect] that can be used to show a centered popup.
-fn popup_area(area: Rect, vertical_constraint: Option<Constraint>, horizontal_constraint: Option<Constraint>) -> Rect {
-    let vertical = Layout::vertical([vertical_constraint.unwrap_or(Constraint::Percentage(35))]).flex(Flex::Center);
+fn popup_area(
+    area: Rect,
+    vertical_constraints: impl IntoIterator<Item = Constraint>,
+    horizontal_constraint: impl IntoIterator<Item = Constraint>,
+) -> Rect {
+    let vertical = Layout::vertical(vertical_constraints).flex(Flex::Center);
     let [area] = vertical.areas(area);
-    let horizontal =
-        Layout::horizontal([horizontal_constraint.unwrap_or(Constraint::Percentage(35))]).flex(Flex::Center);
+    let horizontal = Layout::horizontal(horizontal_constraint).flex(Flex::Center);
     let [area] = horizontal.areas(area);
     area
 }
