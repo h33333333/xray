@@ -96,8 +96,8 @@ impl LayerInspectorPane {
                 EXPANDED_NODE_STATUS_INDICATOR
             };
 
-            write!(&mut node_tree_branch, "{}{}", node_name_prefix, status_prefix,)
-                .with_context(|| format!("failed to format a node {}", idx))?;
+            write!(&mut node_tree_branch, "{node_name_prefix}{status_prefix}")
+                .with_context(|| format!("failed to format a node {idx}"))?;
 
             let mut spans = vec![
                 Span::styled(
@@ -115,7 +115,7 @@ impl LayerInspectorPane {
             let mut path = format!(" {}", path.display());
             if let Some(link) = node.inner.get_link() {
                 write!(&mut path, " -> {}", link.display())
-                    .with_context(|| format!("failed to format a link {}", idx))?;
+                    .with_context(|| format!("failed to format a link {idx}"))?;
             }
 
             spans.push(Span::styled(

@@ -165,7 +165,7 @@ impl Store for AppState {
                 let (active_pane, _) = &mut self.panes[active_pane_idx];
                 let mut active_pane = active_pane
                     .take()
-                    .with_context(|| format!("bug: forgot to return the {} pane?", active_pane_idx))?;
+                    .with_context(|| format!("bug: forgot to return the {active_pane_idx} pane?"))?;
                 let side_effect: Option<SideEffect> = match action {
                     AppAction::Interact => {
                         active_pane

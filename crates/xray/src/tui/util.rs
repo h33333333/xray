@@ -88,7 +88,7 @@ impl Unit {
 pub(crate) fn encode_hex(digest: impl AsRef<[u8]>) -> String {
     let mut s = String::with_capacity(digest.as_ref().len() * 2);
     for &b in digest.as_ref().iter() {
-        write!(&mut s, "{:02x}", b).unwrap();
+        write!(&mut s, "{b:02x}").unwrap();
     }
     s
 }

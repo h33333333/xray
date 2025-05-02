@@ -105,7 +105,7 @@ fn format_hotkeys_section(
             .chain(hotkeys.into_iter().map(move |(hotkey, description)| {
                 Line::from(vec![
                     Span::styled(
-                        format!("{:>longest_hotkey$}  ", hotkey),
+                        format!("{hotkey:>longest_hotkey$}  "),
                         // Make the hotkeys easier to see among the text
                         FIELD_KEY_STYLE.fg(Color::LightBlue),
                     ),

@@ -26,7 +26,7 @@ pub fn formatted_index_derive(input: TokenStream) -> TokenStream {
         let variant_name = &variant.ident;
         // Convert to 1-based index
         let one_based_index = i + 1;
-        let formatted_index = format!("[{}]", one_based_index);
+        let formatted_index = format!("[{one_based_index}]");
 
         quote! {
             #name::#variant_name { .. } => #formatted_index,

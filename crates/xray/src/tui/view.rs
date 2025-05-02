@@ -41,7 +41,7 @@ impl App {
     /// Renders a [Frame] to the [App::terminal] based on the current [AppState].
     fn render(&mut self, store: &AppState) -> anyhow::Result<()> {
         self.terminal
-            .try_draw(|frame| render(frame, store).map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{}", e))))
+            .try_draw(|frame| render(frame, store).map_err(io::Error::other))
             .context("failed to redraw the frame")?;
         Ok(())
     }

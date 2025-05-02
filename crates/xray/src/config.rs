@@ -9,8 +9,9 @@ use dirs::home_dir;
 struct Arg {
     #[arg(short = 'p', long)]
     config_path: Option<PathBuf>,
-    #[arg(short = 'c', long, default_value_t = true)]
-    cache_layers: bool,
+    // TODO: implement layer caching
+    // #[arg(short = 'c', long, default_value_t = true)]
+    // cache_layers: bool,
     #[arg()]
     image: String,
 }
@@ -18,17 +19,12 @@ struct Arg {
 #[derive(Debug)]
 pub struct Config {
     config_path: PathBuf,
-    cache_layers: bool,
     image: String,
 }
 
 impl Config {
     pub fn new() -> anyhow::Result<Self> {
-        let Arg {
-            config_path,
-            cache_layers,
-            image,
-        } = Arg::try_parse().context("failed to parse CLI args")?;
+        let Arg { config_path, image } = Arg::try_parse().context("failed to parse CLI args")?;
 
         let config_path = config_path
             .or_else(|| {
@@ -40,11 +36,7 @@ impl Config {
 
         std::fs::create_dir_all(&config_path).context("failed to create the config directory")?;
 
-        Ok(Config {
-            config_path,
-            cache_layers,
-            image,
-        })
+        Ok(Config { config_path, image })
     }
 
     pub fn make_config_path(&self, path: impl AsRef<Path>) -> PathBuf {
@@ -55,10 +47,6 @@ impl Config {
 
     pub fn config_path(&self) -> &Path {
         &self.config_path
-    }
-
-    pub fn cache_layers(&self) -> bool {
-        self.cache_layers
     }
 
     pub fn image(&self) -> &str {
