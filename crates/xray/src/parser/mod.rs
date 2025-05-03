@@ -9,7 +9,6 @@ use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::ffi::OsStr;
 use std::io::{Read, Seek};
-use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
@@ -342,14 +341,17 @@ impl Parser {
             // A whiteout
 
             // Strip the whiteout prefix
-            let path = Cow::Owned(
-                path.with_file_name(OsStr::from_bytes(
-                    file_name
-                        .as_encoded_bytes()
-                        .strip_prefix(b".wh.")
-                        .expect("prefix must exist at this point"),
-                )),
-            );
+            let path = Cow::Owned(path.with_file_name(
+                // SAFETY: this is okay, as we don't violate the conversion rules
+                unsafe {
+                    OsStr::from_encoded_bytes_unchecked(
+                        file_name
+                            .as_encoded_bytes()
+                            .strip_prefix(b".wh.")
+                            .expect("prefix must exist at this point"),
+                    )
+                },
+            ));
 
             (path, NodeStatus::Deleted)
         } else if file_name.as_encoded_bytes() != b".wh..wh..opq" {
