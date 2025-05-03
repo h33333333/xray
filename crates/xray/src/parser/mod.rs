@@ -398,13 +398,25 @@ impl Parser {
                 changeset.set_layer_recursively(layers.len() as u8)
             }
 
+            // Normalize the layer creation command
+            let created_by = layer_history.created_by.split_whitespace().fold(
+                String::with_capacity(layer_history.created_by.len()),
+                |mut output, word| {
+                    if !output.is_empty() {
+                        output.push(' ');
+                    }
+                    output.push_str(word);
+                    output
+                },
+            );
+
             image_size += layer_size;
             layers.insert(
                 layer_config.digest,
                 Layer {
                     changeset: layer_changeset,
                     size: layer_size,
-                    created_by: layer_history.created_by,
+                    created_by,
                     comment: layer_history.comment,
                 },
             );
