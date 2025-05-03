@@ -1,6 +1,6 @@
 use action::Direction;
 use anyhow::Context;
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use crossterm::terminal::size;
 use dispatcher::Dispatcher;
 use store::AppState;
@@ -34,6 +34,19 @@ impl AppDispatcher {
         loop {
             let event = event::read()?;
             let store = self.get_store();
+
+            // Ignore all key events on Windows besides presses to prevent duplicate events
+            if cfg!(windows)
+                && !matches!(
+                    event,
+                    Event::Key(KeyEvent {
+                        kind: KeyEventKind::Press,
+                        ..
+                    })
+                )
+            {
+                continue;
+            }
 
             match event {
                 // Re-render the interface when terminal window is resized
