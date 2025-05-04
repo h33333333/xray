@@ -24,7 +24,7 @@ pub struct Config {
 
 impl Config {
     pub fn new() -> anyhow::Result<Self> {
-        let Arg { config_path, image } = Arg::try_parse().context("failed to parse CLI args")?;
+        let Arg { config_path, image } = Arg::parse();
 
         let config_path = config_path
             .or_else(|| {
