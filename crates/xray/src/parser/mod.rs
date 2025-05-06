@@ -3,6 +3,7 @@
 mod constants;
 mod json;
 mod node;
+mod seeker;
 mod util;
 
 use std::borrow::Cow;
@@ -20,6 +21,7 @@ use indexmap::IndexMap;
 use json::{ImageHistory, ImageLayerConfigs, JsonBlob, Manifest};
 pub use node::NodeFilters;
 use node::{InnerNode, Node, RestorablePath};
+use seeker::SeekerWithOffset;
 use serde::de::DeserializeOwned;
 use tar::{Archive, Header};
 use util::{determine_blob_type, get_entry_size_in_blocks, sha256_digest_from_hex};
@@ -132,7 +134,8 @@ impl Parser {
 
     /// Parses an OCI-compliant container image from the provided image Tar blob.
     pub fn parse_image<R: Read + Seek>(mut self, src: R) -> anyhow::Result<Image> {
-        let mut archive = Archive::new(src);
+        let seeker = SeekerWithOffset::new(src);
+        let mut archive = Archive::new(seeker);
         let mut entries = archive
             .entries_with_seek()
             .context("failed to get entries from the archive")?;
@@ -185,6 +188,8 @@ impl Parser {
                             .context("failed to wind back the reader")?;
                     }
 
+                    // Mark offset before constructing a new archive inside the next function
+                    reader.mark_offset();
                     let (layer_changeset, layer_size) = self
                         .parse_tar_blob(&mut reader, entry_size_in_blocks * TAR_BLOCK_SIZE as u64)
                         .context("error while parsing a tar layer")?;
@@ -192,6 +197,8 @@ impl Parser {
                     self.parsed_layers
                         .insert(layer_sha256_digest, (layer_changeset, layer_size));
 
+                    // Mark offset before restoring the outer archive below
+                    reader.mark_offset();
                     // Restore the archive and the iterator
                     archive = Archive::new(reader);
                     entries = archive.entries_with_seek()?;
