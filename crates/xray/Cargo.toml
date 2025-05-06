@@ -1,8 +1,19 @@
 [package]
-name = "xray"
-version = "0.1.0"
+name = "xray-tui"
+version = "1.0.0"
 edition = "2021"
+description = "A Docker (or any OCI-compliant) image layer inspector"
+authors = ["h33333333"]
+categories = ["command-line-utilities"]
+keywords = ["terminal", "tui", "docker", "image", "container"]
 license-file = "../../COPYING"
+readme = "../../README.md"
+repository = "https://github.com/h33333333/xray"
+documentation = "https://github.com/h33333333/xray"
+
+[[bin]]
+name = "xray"
+path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.95"

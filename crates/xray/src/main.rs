@@ -3,7 +3,7 @@ use std::io::BufReader;
 use std::path::Path;
 
 use anyhow::Context;
-use xray::{init_logging, AppDispatcher, Config, Parser};
+use xray_tui::{init_logging, AppDispatcher, Config, Parser};
 
 fn main() -> anyhow::Result<()> {
     let config = Config::new()?;

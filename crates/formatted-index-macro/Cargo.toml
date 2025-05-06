@@ -1,7 +1,13 @@
 [package]
 name = "formatted-index-macro"
-version = "0.1.0"
+description = "A small macro that can generate 1-based string indexes for enum variants"
+version = "1.0.0"
 edition = "2021"
+authors = ["h33333333"]
+license-file = "../../COPYING"
+readme = "../../README.md"
+repository = "https://github.com/h33333333/xray"
+documentation = "https://github.com/h33333333/xray"
 
 [lib]
 proc-macro = true
