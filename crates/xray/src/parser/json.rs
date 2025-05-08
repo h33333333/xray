@@ -5,7 +5,6 @@ use std::io::Read;
 use anyhow::Context;
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer};
-use serde_query::Deserialize as QueryDeserialize;
 
 use super::Sha256Digest;
 use crate::parser::constants::{SHA256_DIGEST_LENGTH, SHA256_DIGEST_PREFIX};
@@ -14,16 +13,25 @@ use crate::parser::util::sha256_digest_from_hex;
 pub(super) type ImageLayerConfigs = Vec<LayerConfig>;
 pub(super) type ImageHistory = Vec<HistoryEntry>;
 
-#[derive(QueryDeserialize)]
-pub(super) struct Manifest {
-    #[query(".[0].RepoTags.[0]")]
-    pub image_name: String,
+/// Docker-specific manifest that can be found in the root of an image.
+///
+/// In in our case, it's used to extract the image name and tag, but it's not guaranteed to be present in an image,
+/// especially when using non-Docker container runtimes.
+#[derive(Deserialize)]
+pub(super) struct DockerManifest {
+    #[serde(rename = "RepoTags")]
+    repo_tags: Option<Vec<String>>,
 }
 
-impl Manifest {
-    pub fn from_reader(src: impl Read) -> anyhow::Result<String> {
-        let manifest = serde_json::from_reader::<_, Manifest>(src).context("failed to parse the image's manifest")?;
-        Ok(manifest.image_name)
+impl DockerManifest {
+    pub fn from_reader(src: impl Read) -> anyhow::Result<Option<String>> {
+        let mut manifest =
+            // Docker manifest contains an array of manifest objects, so we need a vec here
+            serde_json::from_reader::<_, Vec<DockerManifest>>(src).context("failed to parse the Docker's manifest")?;
+
+        Ok(manifest
+            .get_mut(0)
+            .and_then(|manifest| manifest.repo_tags.as_mut().and_then(|tags| tags.pop())))
     }
 }
 
@@ -31,6 +39,10 @@ impl Manifest {
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub(super) enum JsonBlob {
+    /// Image Index.
+    ///
+    /// Source: [OCI Image Index Specification](https://github.com/opencontainers/image-spec/blob/main/image-index.md)
+    Index { manifests: Vec<ImageIndexManifest> },
     /// Image Manifest.
     ///
     /// Source: [OCI Image Manifest Specification](https://github.com/opencontainers/image-spec/blob/main/manifest.md).
@@ -96,4 +108,21 @@ where
     }
 
     de.deserialize_str(Sha256HashVisitor)
+}
+
+/// Represents a subset of fields of a single manifest that can be found in the Image Index.
+#[derive(Debug, Deserialize)]
+pub(super) struct ImageIndexManifest {
+    /// Source: [Annotations](https://github.com/opencontainers/image-spec/blob/main/annotations.md).
+    pub annotations: Option<ImageIndexManifestAnnotations>,
+}
+
+/// A set of well-known annotation keys.
+///
+/// Source: [Pre-Defined Annotation Keys](https://github.com/opencontainers/image-spec/blob/main/annotations.md#pre-defined-annotation-keys)
+#[derive(Debug, Deserialize)]
+pub(super) struct ImageIndexManifestAnnotations {
+    /// Fully qualified image name.
+    #[serde(rename = "io.containerd.image.name")]
+    pub fully_qualified_image_name: Option<String>,
 }
