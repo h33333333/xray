@@ -29,5 +29,4 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 formatted-index-macro = { workspace = true }
 regex = "1.11.1"
-serde-query = "0.2.0"
 tar = "0.4.44"

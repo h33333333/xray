@@ -14,11 +14,11 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use constants::{
-    BLOB_PATH_PREFIX, IMAGE_MANIFEST_PATH, SHA256_DIGEST_LENGTH, TAR_BLOCK_SIZE, TAR_MAGIC_NUMBER,
+    BLOB_PATH_PREFIX, IMAGE_INDEX_PATH, IMAGE_MANIFEST_PATH, SHA256_DIGEST_LENGTH, TAR_BLOCK_SIZE, TAR_MAGIC_NUMBER,
     TAR_MAGIC_NUMBER_START_IDX,
 };
 use indexmap::IndexMap;
-use json::{ImageHistory, ImageLayerConfigs, JsonBlob, Manifest};
+use json::{DockerManifest, ImageHistory, ImageLayerConfigs, JsonBlob};
 pub use node::NodeFilters;
 use node::{InnerNode, Node, RestorablePath};
 use seeker::SeekerWithOffset;
@@ -145,9 +145,19 @@ impl Parser {
         while let Some(entry) = entries.next() {
             let mut entry = entry.context("error while reading an entry")?;
 
-            // Parse the image's manifest and extract name and tag
+            // Parse the image's manifest and extract name and tag if they are present
             if entry.header().path_bytes().as_ref() == IMAGE_MANIFEST_PATH {
-                self.tagged_name = Some(Manifest::from_reader(&mut entry)?);
+                self.tagged_name = DockerManifest::from_reader(&mut entry)?;
+                // We are done with this entry
+                continue;
+            }
+
+            // Parse the image's index and extract the name and tag if we don't already have them and they are present in the Index
+            if entry.header().path_bytes().as_ref() == IMAGE_INDEX_PATH && self.tagged_name.is_none() {
+                let json_blob = self.parse_json_blob::<JsonBlob>(&mut entry)?;
+                if let Some(known_json_blob) = json_blob {
+                    self.process_json_blob(known_json_blob);
+                };
                 // We are done with this entry
                 continue;
             }
@@ -249,6 +259,22 @@ impl Parser {
                 self.architecture = Some(parsed_architecture);
                 self.os = Some(parsed_os);
                 self.history = Some(parsed_history);
+            }
+            JsonBlob::Index {
+                manifests: parsed_manifests,
+            } => {
+                for annotations in parsed_manifests.into_iter().flat_map(|manifest| manifest.annotations) {
+                    if let Some(mut image_ref) = annotations.fully_qualified_image_name {
+                        if let Some(image_name_start_pos) = image_ref.rfind('/') {
+                            // Remove the registry if present
+                            image_ref.replace_range(0..=image_name_start_pos, "");
+                        }
+
+                        self.tagged_name = Some(image_ref);
+                        // No need to look further, as we've already found all the information that we might need from the Image Index
+                        break;
+                    }
+                }
             }
         }
     }
