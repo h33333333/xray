@@ -4,6 +4,7 @@ members = ["crates/*"]
 
 [workspace.dependencies]
 formatted-index-macro = { path = "crates/formatted-index-macro", version = "1.0.0" }
+xray-docker = { path = "crates/xray-docker", version = "0.1.0" }
 
 [profile.release]
 codegen-units = 1
