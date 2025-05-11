@@ -2,9 +2,9 @@ use std::borrow::Cow;
 
 use thiserror::Error;
 
-mod docker_host;
+mod api;
 
-pub use docker_host::{DockerHost, get_docker_host};
+pub use api::DockerApi;
 
 pub type Result<T> = std::result::Result<T, DockerError>;
 
@@ -31,7 +31,7 @@ pub enum DockerError {
         source: serde_json::Error,
     },
     #[error("{0}")]
-    Other(&'static str),
+    Other(Cow<'static, str>),
 }
 
 impl DockerError {

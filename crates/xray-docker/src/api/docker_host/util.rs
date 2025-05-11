@@ -21,6 +21,6 @@ pub fn encode_sha256_digest(digest: Sha256Digest) -> String {
 /// Returns the home directory of the current user.
 pub fn get_home_dir() -> Result<PathBuf> {
     homedir::my_home()?.ok_or(DockerError::Other(
-        "unnable to resolve the current user's home directory",
+        "unnable to resolve the current user's home directory".into(),
     ))
 }
