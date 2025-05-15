@@ -7,6 +7,7 @@ use std::os::unix::net::UnixStream;
 use http::StatusCode;
 use httparse::{EMPTY_HEADER, Status};
 
+use super::util::process_available_http_chunks;
 use crate::{DockerError, Result};
 
 trait ReadWrite: Read + Write {}
@@ -42,6 +43,11 @@ impl DockerApiConnection {
         Ok(DockerApiConnection::Unix(conn))
     }
 
+    #[cfg(windows)]
+    pub fn connect<R: AsRef<str>>(addr: R) -> Result<Self> {
+        todo!("not implemented yet")
+    }
+
     // TODO: this needs to be optimized/reworked/checked for edge cases
     /// Sends an encoded request from the provided buffer and then reuses the same buffer to get a response.
     pub fn send(&mut self, buf: &mut Vec<u8>) -> Result<StatusCode> {
@@ -63,6 +69,7 @@ impl DockerApiConnection {
 
         let mut response_code = Option::None;
         let mut body_parsing_mode = Option::None;
+        let mut current_chunk = Vec::new();
 
         let mut temp_buf = [0u8; 1024];
         let mut bytes_read = 0;
@@ -71,10 +78,12 @@ impl DockerApiConnection {
                 DockerError::from_io_error_with_description(e, || "failed to read an HTTP response".into())
             })?;
             bytes_read += filled_bytes;
-            buf.extend_from_slice(&temp_buf[..filled_bytes]);
 
+            let mut should_extend = true;
             // Parse everything until the body if not done already
             if response_code.is_none() {
+                buf.extend_from_slice(&temp_buf[..filled_bytes]);
+
                 let mut headers = [EMPTY_HEADER; 10];
                 let mut response = httparse::Response::new(&mut headers);
                 match response.parse(buf) {
@@ -93,6 +102,10 @@ impl DockerApiConnection {
                                 .find(|header| header.name == "Content-Length" || header.name == "Transfer-Encoding")
                                 . ok_or(DockerError::Other("missing both content-length and transfer-encoding headers in a response from Docker API".into()))?;
 
+                            // Prepare to read the body
+                            let read_body_bytes = bytes_read - body_start_idx;
+                            let body_bytes = &temp_buf[filled_bytes - read_body_bytes..filled_bytes];
+
                             match body_type.name {
                                 "Content-Length" => {
                                     let raw_content_length = str::from_utf8(body_type.value).map_err(|_| {
@@ -104,20 +117,23 @@ impl DockerApiConnection {
                                         DockerError::Other("failed to parse content-length as a number".into())
                                     })?;
 
+                                    // We can simply add the read body bytes to the buffer in this case, as they don't require any additional cleaning
+                                    buf.clear();
+                                    buf.extend_from_slice(body_bytes);
+
+                                    should_extend = false;
                                     body_parsing_mode = Some(BodyParsingMode::FixedLength(content_length));
                                 }
-                                // FIXME: I need to clean the data in this case, as each chunk also contains its length and delims
                                 "Transfer-Encoding" => {
+                                    current_chunk.extend_from_slice(body_bytes);
+                                    buf.clear();
+
+                                    should_extend = false;
                                     body_parsing_mode = Some(BodyParsingMode::Chunks);
                                 }
                                 // Should be unreachable
                                 _ => return Err(DockerError::Other("found an unexpected header".into())),
                             };
-
-                            // Prepare to read the body
-                            let read_body_bytes = bytes_read - body_start_idx;
-                            buf.clear();
-                            buf.extend_from_slice(&temp_buf[filled_bytes - read_body_bytes..filled_bytes]);
                         }
                     }
                     Err(_) => return Err(DockerError::Other("failed to parse an HTTP response".into())),
@@ -126,18 +142,30 @@ impl DockerApiConnection {
 
             if let Some(ref parsing_mode) = body_parsing_mode {
                 match parsing_mode {
-                    BodyParsingMode::Chunks if buf.ends_with(b"0\r\n\r\n") => break,
-                    BodyParsingMode::FixedLength(body_length) if buf.len() == *body_length => break,
-                    _ => (),
+                    BodyParsingMode::Chunks => {
+                        if should_extend {
+                            current_chunk.extend_from_slice(&temp_buf[..filled_bytes]);
+                        }
+
+                        let next_chunk_idx = process_available_http_chunks(&current_chunk, buf)?;
+                        match next_chunk_idx {
+                            Some(next_chunk_idx) => current_chunk.drain(..next_chunk_idx),
+                            None => break,
+                        };
+                    }
+                    BodyParsingMode::FixedLength(body_length) => {
+                        if should_extend {
+                            buf.extend_from_slice(&temp_buf[..filled_bytes]);
+                        }
+
+                        if buf.len() == *body_length {
+                            break;
+                        }
+                    }
                 };
             }
         }
 
         Ok(response_code.expect("must be present at this point"))
-    }
-
-    #[cfg(windows)]
-    pub fn connect<R: AsRef<str>>(addr: R) -> Result<Self> {
-        todo!("not implemented yet")
     }
 }

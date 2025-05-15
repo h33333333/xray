@@ -95,7 +95,6 @@ impl DockerApi {
                 _ => Err(DockerError::Other("failed to export the image".into())),
             }
         } else {
-            dbg!(&self.buffer.len());
             Ok(&self.buffer)
         }
     }
