@@ -30,6 +30,7 @@ pub fn init_logging(config_folder: &Path) -> anyhow::Result<()> {
     tracing_subscriber::registry()
         .with(
             layer()
+                .with_target(false)
                 .with_filter(LevelFilter::INFO)
                 .and_then(
                     layer()

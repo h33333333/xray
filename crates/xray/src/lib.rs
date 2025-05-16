@@ -8,3 +8,5 @@ mod parser;
 pub use parser::Parser;
 mod tui;
 pub use tui::AppDispatcher;
+mod image_source;
+pub use image_source::resolve_image_from_config;
