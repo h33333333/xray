@@ -50,7 +50,7 @@ impl DockerApiConnection {
         todo!("not implemented yet")
     }
 
-    // TODO: this needs to be optimized/reworked/checked for edge cases
+    // TODO:  this needs to be optimized/reworked/checked for edge cases
     /// Sends an encoded request from the provided buffer and then reuses the same buffer to get a response.
     pub fn send(&mut self, buf: &mut Vec<u8>) -> Result<StatusCode> {
         let socket = match self {
@@ -121,6 +121,11 @@ impl DockerApiConnection {
 
                                     // We can simply add the read body bytes to the buffer in this case, as they don't require any additional cleaning
                                     buf.extend_from_slice(body_bytes);
+
+                                    if body_bytes.len() == content_length {
+                                        // We've read all the data already
+                                        break;
+                                    }
 
                                     should_extend = false;
                                     body_parsing_mode = Some(BodyParsingMode::FixedLength(content_length));
