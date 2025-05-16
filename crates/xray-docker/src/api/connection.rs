@@ -7,7 +7,7 @@ use std::os::unix::net::UnixStream;
 use http::StatusCode;
 use httparse::{EMPTY_HEADER, Status};
 
-use super::util::process_available_http_chunks;
+use super::chunk_processor::ChunkProcessor;
 use crate::{DockerError, Result};
 
 trait ReadWrite: Read + Write {}
@@ -27,6 +27,8 @@ enum BodyParsingMode {
 }
 
 impl DockerApiConnection {
+    const DEFAULT_BUF_SIZE: usize = 8_192;
+
     #[cfg(unix)]
     pub fn connect<R: AsRef<str>>(docker_socket_addr: R) -> Result<Self> {
         let conn = UnixStream::connect(
@@ -69,10 +71,10 @@ impl DockerApiConnection {
 
         let mut response_code = Option::None;
         let mut body_parsing_mode = Option::None;
-        let mut current_chunk = Vec::new();
 
-        let mut temp_buf = [0u8; 1024];
+        let mut temp_buf = [0u8; Self::DEFAULT_BUF_SIZE];
         let mut bytes_read = 0;
+        let mut chunk_processor: Option<ChunkProcessor> = None;
         loop {
             let filled_bytes = socket.read(&mut temp_buf).map_err(|e| {
                 DockerError::from_io_error_with_description(e, || "failed to read an HTTP response".into())
@@ -118,18 +120,25 @@ impl DockerApiConnection {
                                     })?;
 
                                     // We can simply add the read body bytes to the buffer in this case, as they don't require any additional cleaning
-                                    buf.clear();
                                     buf.extend_from_slice(body_bytes);
 
                                     should_extend = false;
                                     body_parsing_mode = Some(BodyParsingMode::FixedLength(content_length));
                                 }
                                 "Transfer-Encoding" => {
-                                    current_chunk.extend_from_slice(body_bytes);
                                     buf.clear();
-
-                                    should_extend = false;
                                     body_parsing_mode = Some(BodyParsingMode::Chunks);
+
+                                    chunk_processor = Some(ChunkProcessor::new());
+                                    if chunk_processor
+                                        .as_mut()
+                                        .unwrap()
+                                        .process_available_data(body_bytes, buf)?
+                                    {
+                                        continue;
+                                    } else {
+                                        break;
+                                    }
                                 }
                                 // Should be unreachable
                                 _ => return Err(DockerError::Other("found an unexpected header".into())),
@@ -143,15 +152,15 @@ impl DockerApiConnection {
             if let Some(ref parsing_mode) = body_parsing_mode {
                 match parsing_mode {
                     BodyParsingMode::Chunks => {
-                        if should_extend {
-                            current_chunk.extend_from_slice(&temp_buf[..filled_bytes]);
+                        if chunk_processor
+                            .as_mut()
+                            .unwrap()
+                            .process_available_data(&temp_buf[..filled_bytes], buf)?
+                        {
+                            continue;
+                        } else {
+                            break;
                         }
-
-                        let next_chunk_idx = process_available_http_chunks(&current_chunk, buf)?;
-                        match next_chunk_idx {
-                            Some(next_chunk_idx) => current_chunk.drain(..next_chunk_idx),
-                            None => break,
-                        };
                     }
                     BodyParsingMode::FixedLength(body_length) => {
                         if should_extend {

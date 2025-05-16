@@ -1,5 +1,6 @@
 use std::env::{self};
 
+mod chunk_processor;
 mod connection;
 mod docker_host;
 mod util;
