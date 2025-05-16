@@ -104,7 +104,7 @@ impl ChunkProcessorState {
                 }
 
                 if !size_is_complete {
-                    // Continue where more data is available
+                    // Continue when more data is available
                     return Ok((true, chunk_size_end_pos, None));
                 }
 
