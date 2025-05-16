@@ -36,7 +36,7 @@ impl DockerApi {
             .header("host", "docker")
             .header("accept", "*/*")
             .body(Vec::new())
-            .map_err(|_| DockerError::Other("failed to construct an image inspect request".into()))?;
+            .map_err(|_| DockerError::Other("failed to construct the image inspect request".into()))?;
 
         // Send the  request and receive a response
         self.buffer.clear();
@@ -56,7 +56,7 @@ impl DockerApi {
             .header("accept", "*/*")
             .body(Vec::new())
             .map_err(|_| {
-                DockerError::Other(format!("failed to construct a request to pull the '{image}' image").into())
+                DockerError::Other(format!("failed to construct the request to pull the '{image}' image").into())
             })?;
 
         // Send the  request and receive a response
@@ -82,7 +82,7 @@ impl DockerApi {
             .header("accept", "*/*")
             .body(Vec::new())
             .map_err(|_| {
-                DockerError::Other(format!("failed to construct a request to export the '{image}' image").into())
+                DockerError::Other(format!("failed to construct the request to export the '{image}' image").into())
             })?;
 
         // Send the  request and receive a response
