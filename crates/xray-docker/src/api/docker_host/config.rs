@@ -1,5 +1,5 @@
 use std::env::{self, VarError};
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::BufReader;
 use std::path::PathBuf;
 
@@ -24,9 +24,16 @@ impl DockerConfig {
     /// Tries to parse the Docker config from the resolved config directory.
     ///
     /// Returns the parsed [DockerConfig].
-    pub fn new() -> Result<Self> {
+    pub fn new() -> Result<Option<Self>> {
         let mut config_dir = Self::get_dir()?;
         config_dir.push(DockerConfig::FILENAME);
+
+        if !fs::exists(&config_dir).map_err(|e| {
+            DockerError::from_io_error_with_description(e, || "faild to check if a the Docker config exists".into())
+        })? {
+            // We can't continue if there is no Docker config
+            return Ok(None);
+        }
 
         let docker_config_file = File::open(&config_dir).map_err(|e| {
             DockerError::from_io_error_with_description(e, || "failed to read the Docker config file".into())
@@ -40,7 +47,7 @@ impl DockerConfig {
                 config_dir.pop();
                 // Set the correct config directory
                 config.config_dir = config_dir;
-                config
+                Some(config)
             })
     }
 

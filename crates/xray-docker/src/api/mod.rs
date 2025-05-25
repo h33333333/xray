@@ -113,7 +113,11 @@ impl DockerApi {
         }
 
         // If we don't have an env, we need to check the Docker Context
-        let docker_config = DockerConfig::new()?;
+        let Some(docker_config) = DockerConfig::new()? else {
+            // We can't do anything else at this point besides returning the default Docker host
+            return Ok(DEFAULT_DOCKER_HOST.into());
+        };
+
         let context_meta = ContextMetadata::new_from_docker_config(&docker_config)?;
         if let Some(context_meta) = context_meta {
             Ok(context_meta.into_docker_host().into())
