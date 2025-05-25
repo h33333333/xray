@@ -31,3 +31,4 @@ formatted-index-macro = { workspace = true }
 xray-docker = { workspace = true }
 regex = "1.11.1"
 tar = "0.4.44"
+flate2 = "1.1.1"

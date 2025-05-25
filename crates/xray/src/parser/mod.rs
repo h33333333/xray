@@ -17,6 +17,7 @@ use constants::{
     BLOB_PATH_PREFIX, IMAGE_INDEX_PATH, IMAGE_MANIFEST_PATH, SHA256_DIGEST_LENGTH, TAR_BLOCK_SIZE, TAR_MAGIC_NUMBER,
     TAR_MAGIC_NUMBER_START_IDX,
 };
+use flate2::read::GzDecoder;
 use indexmap::IndexMap;
 use json::{DockerManifest, ImageHistory, ImageLayerConfigs, JsonBlob};
 pub use node::NodeFilters;
@@ -141,7 +142,7 @@ impl Parser {
             .context("failed to get entries from the archive")?;
 
         // A reusable buffer used for determining the blob type
-        let mut tar_header = [0u8; TAR_BLOCK_SIZE];
+        let mut buf = [0u8; TAR_BLOCK_SIZE];
         while let Some(entry) = entries.next() {
             let mut entry = entry.context("error while reading an entry")?;
 
@@ -181,8 +182,8 @@ impl Parser {
             )
             .context("failed to parse the layer's sha256 digest from the path")?;
 
-            let (blob_type, offset) = determine_blob_type(&mut tar_header, &mut entry)
-                .context("failed to determine the blob type of an entry")?;
+            let (blob_type, offset) =
+                determine_blob_type(&mut buf, &mut entry).context("failed to determine the blob type of an entry")?;
 
             match blob_type {
                 BlobType::Empty => {}
@@ -213,9 +214,17 @@ impl Parser {
                     archive = Archive::new(reader);
                     entries = archive.entries_with_seek()?;
                 }
-                BlobType::GzippedTar => todo!("Add support for gzipped tar layers"),
+                BlobType::GzippedTar => {
+                    // Restore the GZIP blob (as we've read some bytes from it to determine the blob type)
+                    let mut gzip_blob = buf[..offset].chain(entry);
+                    let (layer_changeset, layer_size) = self
+                        .parse_gzip_tar_blob(&mut gzip_blob)
+                        .context("error while parsing a gzipped tar layer")?;
+                    self.parsed_layers
+                        .insert(layer_sha256_digest, (layer_changeset, layer_size));
+                }
                 BlobType::Json => {
-                    let json_blob = self.parse_json_blob::<JsonBlob>(&mut tar_header[..offset].chain(entry))?;
+                    let json_blob = self.parse_json_blob::<JsonBlob>(&mut buf[..offset].chain(entry))?;
                     if let Some(known_json_blob) = json_blob {
                         self.process_json_blob(known_json_blob);
                     };
@@ -310,29 +319,70 @@ impl Parser {
                 return Ok((change_set, layer_size));
             }
 
-            let Some((node_path, node, node_size)) = self
-                .process_layer_entry(header)
-                .context("failed to process an entry in the layer")?
-            else {
-                // A `None` means that we can safely skip this entry
-                continue;
-            };
-
-            // Adjust the size
-            layer_size += node_size;
-
-            change_set
-                .insert(
-                    // Use a restorable path here to simplify the further processing
-                    &mut RestorablePath::new(&node_path),
-                    node,
-                    // We will set the actual layer idx later in [Self::finalize], as we don't know it yet.
-                    0,
-                )
-                .context("failed to insert an entry")?;
+            layer_size += self
+                .process_layer_blob_entry_header(header, &mut change_set)
+                .context("failed to process an entry in a Tar layer")?
+                .unwrap_or(0);
         }
 
         Ok((change_set, layer_size))
+    }
+
+    /// Parses a single image layer represented as a GZipped Tar blob.
+    ///
+    /// # Note
+    ///
+    /// It wraps the passed reader in a [GzDecoder] before trying to read entries from it.
+    fn parse_gzip_tar_blob<R: Read>(&self, src: &mut R) -> anyhow::Result<(LayerChangeSet, LayerSize)> {
+        let mut archive = Archive::new(GzDecoder::new(src));
+
+        // We will set the actual layer idx later in [Self::finalize]
+        let mut change_set = LayerChangeSet::new(0);
+
+        let mut layer_size = 0;
+        for entry in archive
+            .entries()
+            .context("failed to get entries from the gzipped tar blob")?
+        {
+            let entry = entry.context("error while reading an entry from the gzipped tar blob")?;
+            let header = entry.header();
+
+            layer_size += self
+                .process_layer_blob_entry_header(header, &mut change_set)
+                .context("failed to process an entry in a GZipped Tar layer")?
+                .unwrap_or(0);
+        }
+
+        Ok((change_set, layer_size))
+    }
+
+    /// Processes a single Tar [Header] of an entry in a layer.
+    ///
+    /// Returns the entry's size if it was successfully added to the provided [LayerChangeSet].
+    fn process_layer_blob_entry_header(
+        &self,
+        header: &Header,
+        changeset: &mut LayerChangeSet,
+    ) -> anyhow::Result<Option<u64>> {
+        let Some((node_path, node, node_size)) = self
+            .process_layer_entry(header)
+            .context("failed to process an entry in the layer")?
+        else {
+            // A `None` means that we can safely skip this entry
+            return Ok(None);
+        };
+
+        changeset
+            .insert(
+                // Use a restorable path here to simplify the further processing
+                &mut RestorablePath::new(&node_path),
+                node,
+                // We will set the actual layer idx later in [Self::finalize], as we don't know it yet.
+                0,
+            )
+            .context("failed to insert an entry")?;
+
+        Ok(Some(node_size))
     }
 
     /// Processes a TAR header of a single entry (a Node) in a layer.
