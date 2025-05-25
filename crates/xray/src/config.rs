@@ -7,8 +7,10 @@ use dirs::home_dir;
 #[derive(clap::Args)]
 #[group(required = false, multiple = false)]
 struct ClapImageSource {
+    /// Force image resolution using Docker
     #[arg(short = 'd', long = "docker")]
     force_docker: bool,
+    /// Force image resolution using a tarred image
     #[arg(short = 'f', long = "fs")]
     force_fs: bool,
 }
@@ -28,6 +30,9 @@ impl ClapImageSource {
 #[derive(Parser)]
 #[command(version, about)]
 struct Arg {
+    /// Override the config directory location.
+    ///
+    /// Default: $HOME/.xray
     #[arg(short = 'p', long)]
     config_path: Option<PathBuf>,
     // TODO: implement layer caching

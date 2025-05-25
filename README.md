@@ -56,19 +56,40 @@ Usage: xray [OPTIONS] <IMAGE>
 Arguments:
   <IMAGE>
 
+
 Options:
   -p, --config-path <CONFIG_PATH>
-  -h, --help                       Print help
-  -V, --version                    Print version
+          Override the config directory location.
+
+          Default: $HOME/.xray
+
+  -d, --docker
+          Force image resolution using Docker
+
+  -f, --fs
+          Force image resolution using a tarred image
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version
 ```
 
-### Starting the app
+### Using the app
 
-To inspect a Docker image stored as a [tarred repository](https://docs.docker.com/reference/cli/docker/image/save/) use:
+To inspect an image use:
 
 ```bash
-xray <PATH_TO_IMAGE_TAR>
+xray <IMAGE>[:tag]
 ```
+
+`xray` will try to resolve the provided image using the default resolution order:
+
+1. Look for a [tarred repository](https://docs.docker.com/reference/cli/docker/image/save/) with image locally (treating the provided argument as a **path**)
+2. Try to resolve the image using Docker
+
+> 💡 Please refer to `xray --help` if you want to force a specific image resolver.
 
 ### Keybindings
 
@@ -101,7 +122,6 @@ xray <PATH_TO_IMAGE_TAR>
 
 ## Limitations
 
-- GZipped Tar image layers are not supported, which may cause issues for certain images
 - Opaque whiteouts are not handled properly
 - Some panes are missing the vertical/horizontal scroll feature, which may cause issues in certain contexts
 
