@@ -41,7 +41,7 @@ impl DockerApi {
         // Send the  request and receive a response
         self.buffer.clear();
         encode_request(&request, &mut self.buffer)?;
-        let status_code = self.connection.send(&mut self.buffer)?;
+        let status_code = self.connection.make_request(&mut self.buffer)?;
 
         Ok(status_code == StatusCode::OK)
     }
@@ -62,7 +62,7 @@ impl DockerApi {
         // Send the  request and receive a response
         self.buffer.clear();
         encode_request(&request, &mut self.buffer)?;
-        let status_code = self.connection.send(&mut self.buffer)?;
+        let status_code = self.connection.make_request(&mut self.buffer)?;
 
         if status_code != http::StatusCode::OK {
             match status_code {
@@ -88,7 +88,7 @@ impl DockerApi {
         // Send the  request and receive a response
         self.buffer.clear();
         encode_request(&request, &mut self.buffer)?;
-        let status_code = self.connection.send(&mut self.buffer)?;
+        let status_code = self.connection.make_request(&mut self.buffer)?;
 
         if status_code != http::StatusCode::OK {
             match status_code {

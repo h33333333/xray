@@ -30,6 +30,8 @@ impl ImageSourcer for DockerSource {
 
         let raw_image = docker_api.export_image(image)?;
 
+        tracing::info!("Successfully exported the image from Docker, parsing it...");
+
         let reader = Cursor::new(raw_image);
         let parser = Parser::default();
         parser.parse_image(reader).context("failed to parse the image")
