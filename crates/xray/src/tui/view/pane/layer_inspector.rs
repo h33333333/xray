@@ -1,5 +1,6 @@
+use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::fmt::Write as _;
+use std::fmt::{self, Write as _};
 
 use anyhow::Context;
 use ratatui::style::Style;
@@ -303,6 +304,34 @@ impl LayerInspectorPane {
     /// Returns a filter popup if it should be shown on the screen.
     pub fn filter_popup(&self) -> Option<&FilterPopup> {
         self.is_showing_filter_popup.then_some(&self.filter_popup)
+    }
+
+    /// Returns a string representation of absolute path to the currently selected node.
+    pub fn get_current_node_full_path(&self, state: &AppState) -> anyhow::Result<Cow<'static, str>> {
+        let (tree, _) = if let Some((tree, total_nodes)) = self.filtered_changeset.as_ref() {
+            // Use the filtered changeset if it's present
+            (tree, *total_nodes)
+        } else {
+            state.get_aggregated_layers_changeset()?
+        };
+
+        // Reconstruct the path to the currently selected node
+        let path = tree
+            .iter()
+            .enumerate()
+            .filter(|(idx, (_, node, _, _))| {
+                // We are interested in nodes that contain the current node or are the currently active node
+                *idx == self.current_node_idx
+                    || node.inner.get_n_of_child_nodes().is_some_and(|n_of_nodes| {
+                        idx + n_of_nodes >= self.current_node_idx && *idx <= self.current_node_idx
+                    })
+            })
+            .try_fold(String::new(), |mut acc, (_, (path, _, _, _))| {
+                write!(acc, "/{}", path.display())?;
+                Result::<String, fmt::Error>::Ok(acc)
+            })?;
+
+        Ok(path.into())
     }
 
     /// Returns true if node at the provided index is currently collapsed.

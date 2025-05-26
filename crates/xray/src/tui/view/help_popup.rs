@@ -78,7 +78,8 @@ fn get_hotkeys_for_active_pane(hotkeys: &mut Vec<(&'static str, &'static str)>, 
         }
         ActivePane::LayerInspector => {
             hotkeys.push(("enter, space", "toggle the selected directory"));
-            hotkeys.push(("ctrl-f", "show the filter popup"))
+            hotkeys.push(("ctrl-f", "show the filter popup"));
+            hotkeys.push(("y", "copy path to the clipboard"))
         }
         ActivePane::LayerSelector => {
             hotkeys.push(("left, h", "scroll left"));
