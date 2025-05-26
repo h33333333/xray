@@ -210,6 +210,13 @@ impl Pane {
                     LayerInfoField::Comment => selected_layer.comment.as_ref()?.into(),
                 })
             }
+            Pane::LayerInspector(pane) => match pane.get_current_node_full_path(state) {
+                Ok(path) => Some(path),
+                Err(e) => {
+                    tracing::debug!("Failed to get the path of the currently selected node: {}", e);
+                    None
+                }
+            },
             _ => None,
         }
     }
