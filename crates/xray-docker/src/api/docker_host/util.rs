@@ -15,7 +15,10 @@ pub fn sha256_digest<T: AsRef<[u8]>>(src: T) -> Sha256Digest {
 
 /// Creates a hex string from the provided [Sha256Digest].
 pub fn encode_sha256_digest(digest: Sha256Digest) -> String {
-    digest.iter().map(|b| format!("{b:02x}")).collect::<String>()
+    digest
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>()
 }
 
 /// Returns the home directory of the current user.

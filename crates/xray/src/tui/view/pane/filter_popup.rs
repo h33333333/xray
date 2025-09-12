@@ -39,7 +39,9 @@ pub struct FilterPopup {
 
 impl FilterPopup {
     /// Returns a widget that can be rendered inside the layer inspector pane and its vertical and horizontal size constraints.
-    pub fn render_with_layout_constraints(&self) -> (Paragraph<'_>, Constraint, Constraint) {
+    pub fn render_with_layout_constraints(
+        &self,
+    ) -> (Paragraph<'_>, Constraint, Constraint) {
         let block = Block::bordered()
             .border_type(BorderType::Thick)
             .padding(POPUP_PADDING)
@@ -68,7 +70,8 @@ impl FilterPopup {
             FilterInput::PathFilter => self.path_filter.push(input),
             FilterInput::SizeFilter => {
                 if let Some(digit) = input.to_digit(10) {
-                    self.node_size_filter = self.node_size_filter * 10 + digit as u64
+                    self.node_size_filter =
+                        self.node_size_filter * 10 + digit as u64
                 }
             }
         }
@@ -87,17 +90,24 @@ impl FilterPopup {
     /// Changes settings of the currently active filter (doesn't change the filter itself).
     pub fn toggle_active_input(&mut self) {
         match self.active_filter_input {
-            FilterInput::PathFilter => self.path_filter_kind.toggle(Direction::Forward),
-            FilterInput::SizeFilter => self.size_filter_units.toggle(Direction::Forward),
+            FilterInput::PathFilter => {
+                self.path_filter_kind.toggle(Direction::Forward)
+            }
+            FilterInput::SizeFilter => {
+                self.size_filter_units.toggle(Direction::Forward)
+            }
         }
     }
 
     /// Returns a [NodeFilters] instance created using this popup's data.
     pub fn filters(&self) -> NodeFilters<'_, '_> {
-        let mut filter = NodeFilters::default().with_size_filter(self.size_filter_in_units());
+        let mut filter = NodeFilters::default()
+            .with_size_filter(self.size_filter_in_units());
 
         match self.path_filter_kind {
-            PathFilterKind::Regular => filter = filter.with_path_filter(Path::new(&self.path_filter)),
+            PathFilterKind::Regular => {
+                filter = filter.with_path_filter(Path::new(&self.path_filter))
+            }
             PathFilterKind::Regex => {
                 if let Some(regex) = self.path_regex() {
                     filter = filter.with_regex(regex);
@@ -136,31 +146,44 @@ impl FilterPopup {
     }
 
     /// Returns a [Vec] of keybindings to be rendered at the bottom of the popup.
-    fn keybindings(&self) -> Vec<Span> {
+    fn keybindings(&self) -> Vec<Span<'_>> {
         let mut keybindings = vec![
             // Padding
             Span::from("  "),
         ];
 
-        let mut add_new_keybinding = |seq: &'static str, description: &'static str| {
-            if keybindings.len() > 1 {
-                // Separate keybindings
-                keybindings.push(Span::styled(", ", Style::new().fg(Color::Gray)));
-            }
+        let mut add_new_keybinding =
+            |seq: &'static str, description: &'static str| {
+                if keybindings.len() > 1 {
+                    // Separate keybindings
+                    keybindings
+                        .push(Span::styled(", ", Style::new().fg(Color::Gray)));
+                }
 
-            // Add the key sequence
-            keybindings.push(Span::styled(seq, Style::new().bold().fg(Color::White)));
-            // Separator
-            keybindings.push(Span::styled(" - ", Style::new().fg(Color::Gray)));
-            // Add the description
-            keybindings.push(Span::styled(description, Style::new().fg(Color::Gray)));
-        };
+                // Add the key sequence
+                keybindings.push(Span::styled(
+                    seq,
+                    Style::new().bold().fg(Color::White),
+                ));
+                // Separator
+                keybindings
+                    .push(Span::styled(" - ", Style::new().fg(Color::Gray)));
+                // Add the description
+                keybindings.push(Span::styled(
+                    description,
+                    Style::new().fg(Color::Gray),
+                ));
+            };
 
         add_new_keybinding("tab", "toggle filter");
 
         match self.active_filter_input {
-            FilterInput::PathFilter => add_new_keybinding("ctrl-l", "toggle filter kind"),
-            FilterInput::SizeFilter => add_new_keybinding("ctrl-l", "toggle size units"),
+            FilterInput::PathFilter => {
+                add_new_keybinding("ctrl-l", "toggle filter kind")
+            }
+            FilterInput::SizeFilter => {
+                add_new_keybinding("ctrl-l", "toggle size units")
+            }
         }
 
         add_new_keybinding("enter", "apply");

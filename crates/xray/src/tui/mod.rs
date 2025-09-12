@@ -1,6 +1,8 @@
 use action::Direction;
 use anyhow::Context;
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{
+    self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
+};
 use crossterm::terminal::size;
 use dispatcher::Dispatcher;
 use store::AppState;
@@ -20,7 +22,8 @@ pub type AppDispatcher = Dispatcher<AppState, App>;
 impl AppDispatcher {
     /// Creates a new [AppDispatcher] from a parsed [Image].
     pub fn init(image: Image) -> anyhow::Result<Self> {
-        let store = AppState::new(image).context("failed to initialize the app state")?;
+        let store = AppState::new(image)
+            .context("failed to initialize the app state")?;
         let view = App::new();
         Ok(Dispatcher::new(store, view))
     }
@@ -50,13 +53,20 @@ impl AppDispatcher {
 
             match event {
                 // Re-render the interface when terminal window is resized
-                Event::Resize(h, v) => self.dispatch(AppAction::Empty((h, v)))?,
+                Event::Resize(h, v) => {
+                    self.dispatch(AppAction::Empty((h, v)))?
+                }
                 // Quit
                 Event::Key(event)
-                    if (event.code == KeyCode::Char('q') && !store.is_in_insert_mode)
-                        || (event.code == KeyCode::Char('c') && event.modifiers.intersects(KeyModifiers::CONTROL)) =>
+                    if (event.code == KeyCode::Char('q')
+                        && !store.is_in_insert_mode)
+                        || (event.code == KeyCode::Char('c')
+                            && event
+                                .modifiers
+                                .intersects(KeyModifiers::CONTROL)) =>
                 {
-                    if store.show_help_popup && event.code == KeyCode::Char('q') {
+                    if store.show_help_popup && event.code == KeyCode::Char('q')
+                    {
                         // Allow the users to close the help popup on `q` and don't exit the app in this case.
                         self.dispatch(AppAction::ToggleHelpPane)?;
                         continue;
@@ -68,23 +78,32 @@ impl AppDispatcher {
                 Event::Key(event) if store.is_in_insert_mode => {
                     if event.code == KeyCode::Enter
                         || event.code == KeyCode::Esc
-                        || (event.code == KeyCode::Char('f') && event.modifiers.intersects(KeyModifiers::CONTROL))
+                        || (event.code == KeyCode::Char('f')
+                            && event
+                                .modifiers
+                                .intersects(KeyModifiers::CONTROL))
                     {
                         self.dispatch(AppAction::ToggleInputMode)?;
                         continue;
                     }
 
-                    if event.code == KeyCode::Backspace || event.code == KeyCode::Delete {
+                    if event.code == KeyCode::Backspace
+                        || event.code == KeyCode::Delete
+                    {
                         self.dispatch(AppAction::InputDeleteCharacter)?;
                         continue;
                     }
 
-                    if event.code == KeyCode::Char('l') && event.modifiers.intersects(KeyModifiers::CONTROL) {
+                    if event.code == KeyCode::Char('l')
+                        && event.modifiers.intersects(KeyModifiers::CONTROL)
+                    {
                         self.dispatch(AppAction::Interact)?;
                         continue;
                     }
 
-                    if event.code == KeyCode::Tab || event.code == KeyCode::BackTab {
+                    if event.code == KeyCode::Tab
+                        || event.code == KeyCode::BackTab
+                    {
                         let direction = if event.code == KeyCode::Tab {
                             Direction::Forward
                         } else {
@@ -95,7 +114,10 @@ impl AppDispatcher {
                     }
 
                     if let KeyCode::Char(input) = event.code {
-                        let input = if event.modifiers.intersects(KeyModifiers::SHIFT) {
+                        let input = if event
+                            .modifiers
+                            .intersects(KeyModifiers::SHIFT)
+                        {
                             input.to_ascii_uppercase()
                         } else {
                             input
@@ -112,23 +134,38 @@ impl AppDispatcher {
                     self.dispatch(AppAction::TogglePane(Direction::Backward))?;
                 }
                 // Scroll left
-                Event::Key(event) if event.code == KeyCode::Char('h') || event.code == KeyCode::Left => {
+                Event::Key(event)
+                    if event.code == KeyCode::Char('h')
+                        || event.code == KeyCode::Left =>
+                {
                     self.dispatch(AppAction::Scroll(Direction::Backward))?;
                 }
                 // Move down
-                Event::Key(event) if event.code == KeyCode::Char('j') || event.code == KeyCode::Down => {
+                Event::Key(event)
+                    if event.code == KeyCode::Char('j')
+                        || event.code == KeyCode::Down =>
+                {
                     self.dispatch(AppAction::Move(Direction::Forward))?;
                 }
                 // Move up
-                Event::Key(event) if event.code == KeyCode::Char('k') || event.code == KeyCode::Up => {
+                Event::Key(event)
+                    if event.code == KeyCode::Char('k')
+                        || event.code == KeyCode::Up =>
+                {
                     self.dispatch(AppAction::Move(Direction::Backward))?;
                 }
                 // Scroll right
-                Event::Key(event) if event.code == KeyCode::Char('l') || event.code == KeyCode::Right => {
+                Event::Key(event)
+                    if event.code == KeyCode::Char('l')
+                        || event.code == KeyCode::Right =>
+                {
                     self.dispatch(AppAction::Scroll(Direction::Forward))?;
                 }
                 // Interact within the current pane.
-                Event::Key(event) if event.code == KeyCode::Enter || event.code == KeyCode::Char(' ') => {
+                Event::Key(event)
+                    if event.code == KeyCode::Enter
+                        || event.code == KeyCode::Char(' ') =>
+                {
                     self.dispatch(AppAction::Interact)?;
                 }
 
@@ -154,7 +191,10 @@ impl AppDispatcher {
                 }
                 // Toggle path filter input
                 Event::Key(event)
-                    if event.code == KeyCode::Char('f') && event.modifiers.intersects(KeyModifiers::CONTROL) =>
+                    if event.code == KeyCode::Char('f')
+                        && event
+                            .modifiers
+                            .intersects(KeyModifiers::CONTROL) =>
                 {
                     self.dispatch(AppAction::ToggleInputMode)?;
                 }

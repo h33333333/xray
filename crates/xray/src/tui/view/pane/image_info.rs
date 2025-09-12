@@ -51,7 +51,8 @@ impl ImageInfoPane {
     }
 
     pub fn get_fields(&self) -> [Field<'_, ImageInfoField>; 5] {
-        let (image_size, unit) = Unit::bytes_to_human_readable_units(*self.size.deref());
+        let (image_size, unit) =
+            Unit::bytes_to_human_readable_units(*self.size.deref());
         let mut fields = [
             (ImageInfoField::Repository, self.image_name.as_ref().into()),
             (ImageInfoField::Tag, self.tag.as_ref().into()),

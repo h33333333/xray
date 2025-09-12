@@ -4,16 +4,26 @@ use http::Request;
 
 use crate::{DockerError, Result};
 
-pub fn encode_request<T: AsRef<[u8]>, O: Write>(req: &Request<T>, mut dst: O) -> Result<()> {
+pub fn encode_request<T: AsRef<[u8]>, O: Write>(
+    req: &Request<T>,
+    mut dst: O,
+) -> Result<()> {
     // Write start line
     write!(
         dst,
         "{} {} {:?}\r\n",
         req.method(),
-        req.uri().path_and_query().map(|p| p.as_str()).unwrap_or("/"),
+        req.uri()
+            .path_and_query()
+            .map(|p| p.as_str())
+            .unwrap_or("/"),
         req.version()
     )
-    .map_err(|e| DockerError::from_io_error_with_description(e, || "failed to encode the HTTP start line".into()))?;
+    .map_err(|e| {
+        DockerError::from_io_error_with_description(e, || {
+            "failed to encode the HTTP start line".into()
+        })
+    })?;
 
     // Write headers
     for (name, value) in req.headers() {
@@ -22,7 +32,10 @@ pub fn encode_request<T: AsRef<[u8]>, O: Write>(req: &Request<T>, mut dst: O) ->
             "{}: {}\r\n",
             name,
             value.to_str().map_err(|_| DockerError::Other(
-                format!("invalid value for the '{name}' HTTP header: '{value:?}'").into()
+                format!(
+                    "invalid value for the '{name}' HTTP header: '{value:?}'"
+                )
+                .into()
             ))?
         )
         .map_err(|e| {
@@ -34,13 +47,17 @@ pub fn encode_request<T: AsRef<[u8]>, O: Write>(req: &Request<T>, mut dst: O) ->
 
     // End of headers
     write!(dst, "\r\n").map_err(|e| {
-        DockerError::from_io_error_with_description(e, || "failed to write an empty line after HTTP headers".into())
+        DockerError::from_io_error_with_description(e, || {
+            "failed to write an empty line after HTTP headers".into()
+        })
     })?;
 
     // Write body if it exists
     if !req.body().as_ref().is_empty() {
         dst.write_all(req.body().as_ref()).map_err(|e| {
-            DockerError::from_io_error_with_description(e, || "failed to write an HTTP request body".into())
+            DockerError::from_io_error_with_description(e, || {
+                "failed to write an HTTP request body".into()
+            })
         })?;
     }
 

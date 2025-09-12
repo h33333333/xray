@@ -28,12 +28,16 @@ pub struct LayerInfoPane {
 }
 
 impl LayerInfoPane {
-    pub fn get_fields<'a>(digest: &'a Sha256Digest, layer: &'a Layer) -> [Field<'a, LayerInfoField>; 3] {
-        let comment: Cow<'a, str> = if let Some(comment) = layer.comment.as_ref() {
-            comment.into()
-        } else {
-            MISSING_COMMENT_PLACEHOLDER.into()
-        };
+    pub fn get_fields<'a>(
+        digest: &'a Sha256Digest,
+        layer: &'a Layer,
+    ) -> [Field<'a, LayerInfoField>; 3] {
+        let comment: Cow<'a, str> =
+            if let Some(comment) = layer.comment.as_ref() {
+                comment.into()
+            } else {
+                MISSING_COMMENT_PLACEHOLDER.into()
+            };
         let mut fields = [
             (LayerInfoField::Digest, encode_hex(digest).into()),
             (LayerInfoField::Command, (&layer.created_by).into()),

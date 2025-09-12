@@ -22,7 +22,10 @@ impl<'a> RestorablePath<'a> {
 
     /// Returns the current [Self::path] component.
     pub(super) fn get_current_component(&self) -> Option<&Path> {
-        self.path.iter().nth(self.current_component_idx as usize).map(Path::new)
+        self.path
+            .iter()
+            .nth(self.current_component_idx as usize)
+            .map(Path::new)
     }
 
     /// Returns a new [RestorablePath] with its state reset to the original state of this instance.

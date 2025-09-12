@@ -68,7 +68,8 @@ impl InnerNode {
         let children = self.children()?;
         let mut n_of_children = children.len();
         for (_, child_node) in children.iter() {
-            n_of_children += child_node.inner.get_n_of_child_nodes().unwrap_or(0)
+            n_of_children +=
+                child_node.inner.get_n_of_child_nodes().unwrap_or(0)
         }
         Some(n_of_children)
     }
@@ -115,61 +116,71 @@ impl InnerNode {
                     .unwrap_or(false);
 
                 // Path-based filtering
-                let path_filter_for_child = if let Some(path_filter) = filter.path_filter.as_ref() {
-                    let is_filtered_out = if let Some(leftmost_part) = path_filter.get_current_component() {
-                        path != Path::new(".")
-                            && !path
-                                .as_os_str()
-                                .to_str()
-                                // We need to convert both paths to a str to check for a partial match using `contains`
-                                .and_then(|path| {
-                                    leftmost_part.to_str().map(|leftmost_part| path.contains(leftmost_part))
-                                })
-                                // If anything fails here, exclude the node
-                                .unwrap_or(true)
-                    } else {
-                        // If there is no longer a filter, then we simply retain the node
-                        return true;
-                    };
-
-                    // Directories are filtered out based on their children when using relative path, so we don't filter them out here
-                    if is_filtered_out && (!path_filter.is_using_relative_path() || !is_dir_with_children) {
-                        // Exclude filtered out nodes (files, empty dirs, and mismatched dirs when using an absolute path)
-                        return false;
-                    }
-
-                    let possibly_empty_filter = if path != Path::new(".") {
-                        if is_filtered_out {
-                            // This is only reachable when using relative paths, the current node is a dir, and it didn't pass the check.
-                            // In this case, we reset the path filter back to its original state and check children of the current node.
-                            path_filter.restore()
+                let path_filter_for_child =
+                    if let Some(path_filter) = filter.path_filter.as_ref() {
+                        let is_filtered_out = if let Some(leftmost_part) =
+                            path_filter.get_current_component()
+                        {
+                            path != Path::new(".")
+                                && !path
+                                    .as_os_str()
+                                    .to_str()
+                                    // We need to convert both paths to a str to check for a partial match using `contains`
+                                    .and_then(|path| {
+                                        leftmost_part.to_str().map(
+                                            |leftmost_part| {
+                                                path.contains(leftmost_part)
+                                            },
+                                        )
+                                    })
+                                    // If anything fails here, exclude the node
+                                    .unwrap_or(true)
                         } else {
-                            // In all other cases, we advance the current path filter component by 1
-                            path_filter.advance()
+                            // If there is no longer a filter, then we simply retain the node
+                            return true;
+                        };
+
+                        // Directories are filtered out based on their children when using relative path, so we don't filter them out here
+                        if is_filtered_out
+                            && (!path_filter.is_using_relative_path()
+                                || !is_dir_with_children)
+                        {
+                            // Exclude filtered out nodes (files, empty dirs, and mismatched dirs when using an absolute path)
+                            return false;
                         }
+
+                        let possibly_empty_filter = if path != Path::new(".") {
+                            if is_filtered_out {
+                                // This is only reachable when using relative paths, the current node is a dir, and it didn't pass the check.
+                                // In this case, we reset the path filter back to its original state and check children of the current node.
+                                path_filter.restore()
+                            } else {
+                                // In all other cases, we advance the current path filter component by 1
+                                path_filter.advance()
+                            }
+                        } else {
+                            // Pass the filter as is
+                            path_filter.clone()
+                        };
+
+                        // Don't pass an empty filter if we've already used all of its components,
+                        // use [Option::None] instead.
+                        let filter = (!possibly_empty_filter
+                            .get_current_component()
+                            .map(|component| component.as_os_str().is_empty())
+                            .unwrap_or(true))
+                        .then_some(possibly_empty_filter);
+
+                        if filter.is_none() && !is_filtered_out {
+                            // This is only reachable if the current node matched the last component in the filter.
+                            // In this case, we simply inclue the node and don't do any further child filtering (as their parent passed the check).
+                            return true;
+                        }
+
+                        filter
                     } else {
-                        // Pass the filter as is
-                        path_filter.clone()
+                        None
                     };
-
-                    // Don't pass an empty filter if we've already used all of its components,
-                    // use [Option::None] instead.
-                    let filter = (!possibly_empty_filter
-                        .get_current_component()
-                        .map(|component| component.as_os_str().is_empty())
-                        .unwrap_or(true))
-                    .then_some(possibly_empty_filter);
-
-                    if filter.is_none() && !is_filtered_out {
-                        // This is only reachable if the current node matched the last component in the filter.
-                        // In this case, we simply inclue the node and don't do any further child filtering (as their parent passed the check).
-                        return true;
-                    }
-
-                    filter
-                } else {
-                    None
-                };
 
                 // Regex-based filtering
                 if let Some(regex) = filter.path_regex.as_deref() {
@@ -224,7 +235,10 @@ impl InnerNode {
             if !state.children.contains_key(current_path_component) {
                 state.children.insert(
                     current_path_component.into(),
-                    Node::new_with_inner(layer_digest, InnerNode::Directory(DirectoryState::new_empty())),
+                    Node::new_with_inner(
+                        layer_digest,
+                        InnerNode::Directory(DirectoryState::new_empty()),
+                    ),
                 );
             }
         } else {
@@ -236,7 +250,10 @@ impl InnerNode {
             let mut dir_state = DirectoryState::new_with_size(new_node.size());
             dir_state.children.insert(
                 current_path_component.into(),
-                Node::new_with_inner(layer_digest, InnerNode::Directory(DirectoryState::new_empty())),
+                Node::new_with_inner(
+                    layer_digest,
+                    InnerNode::Directory(DirectoryState::new_empty()),
+                ),
             );
             *self = InnerNode::Directory(dir_state);
         };
@@ -256,25 +273,41 @@ impl InnerNode {
     pub(super) fn merge(mut self, other: Self, digest: u8) -> Self {
         match (&mut self, other) {
             // Both nodes are directories
-            (InnerNode::Directory(left_state), InnerNode::Directory(right_state)) => {
+            (
+                InnerNode::Directory(left_state),
+                InnerNode::Directory(right_state),
+            ) => {
                 for (path, right_node) in right_state.children {
                     // If a node if present in both left and right parent node, we need to merge the two.
                     // Otherwise, we use the node from the right parent as is.
-                    let updated_node = if let Some(left_node) = left_state.children.remove(&path) {
+                    let updated_node = if let Some(left_node) =
+                        left_state.children.remove(&path)
+                    {
                         left_node.inner.merge(right_node.inner, digest)
                     } else {
                         right_node.inner
                     };
                     // Insert the updated node back into the left parent node
-                    left_state
-                        .children
-                        .insert(path, Node::new_with_inner(right_node.updated_in, updated_node));
+                    left_state.children.insert(
+                        path,
+                        Node::new_with_inner(
+                            right_node.updated_in,
+                            updated_node,
+                        ),
+                    );
                 }
                 // Update the node status accordingly
-                let new_status = match (&left_state.status, &right_state.status) {
+                let new_status = match (&left_state.status, &right_state.status)
+                {
                     (_, NodeStatus::Added(_)) => {
                         // Calculate the updated directory size after merging
-                        NodeStatus::Modified(left_state.children.values().map(|tree| tree.inner.size()).sum())
+                        NodeStatus::Modified(
+                            left_state
+                                .children
+                                .values()
+                                .map(|tree| tree.inner.size())
+                                .sum(),
+                        )
                     }
                     (_, _) => right_state.status,
                 };
@@ -283,8 +316,11 @@ impl InnerNode {
             // Both nodes are files
             (InnerNode::File(left_state), InnerNode::File(right_state)) => {
                 // Update the node status accordingly
-                let new_status = match (&left_state.status, &right_state.status) {
-                    (_, NodeStatus::Added(new_size)) => NodeStatus::Modified(*new_size),
+                let new_status = match (&left_state.status, &right_state.status)
+                {
+                    (_, NodeStatus::Added(new_size)) => {
+                        NodeStatus::Modified(*new_size)
+                    }
                     (_, _) => right_state.status,
                 };
                 left_state.status = new_status;
@@ -343,7 +379,9 @@ impl InnerNode {
         };
 
         match status {
-            NodeStatus::Added(size) | NodeStatus::Modified(size) => *size += inc,
+            NodeStatus::Added(size) | NodeStatus::Modified(size) => {
+                *size += inc
+            }
             _ => (),
         }
     }

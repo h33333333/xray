@@ -3,11 +3,17 @@ use std::io::Read;
 use anyhow::Context as _;
 use tar::Header;
 
-use super::constants::{GZIP_MAGIC_NUMBER, SHA256_DIGEST_LENGTH, TAR_BLOCK_SIZE};
-use super::{BlobType, Sha256Digest, TAR_MAGIC_NUMBER, TAR_MAGIC_NUMBER_START_IDX};
+use super::constants::{
+    GZIP_MAGIC_NUMBER, SHA256_DIGEST_LENGTH, TAR_BLOCK_SIZE,
+};
+use super::{
+    BlobType, Sha256Digest, TAR_MAGIC_NUMBER, TAR_MAGIC_NUMBER_START_IDX,
+};
 
 /// Converts a SHA256 digest from hex bytes to [Sha256Digest].
-pub(super) fn sha256_digest_from_hex(src: impl AsRef<[u8]>) -> anyhow::Result<Sha256Digest> {
+pub(super) fn sha256_digest_from_hex(
+    src: impl AsRef<[u8]>,
+) -> anyhow::Result<Sha256Digest> {
     if src.as_ref().len() != SHA256_DIGEST_LENGTH * 2 {
         anyhow::bail!(
             "Expected a slice of length {}, got {}",
@@ -24,7 +30,8 @@ pub(super) fn sha256_digest_from_hex(src: impl AsRef<[u8]>) -> anyhow::Result<Sh
         .filter_map(Result::ok)
         .enumerate()
     {
-        let byte = u8::from_str_radix(byte_str, 16).context("error while parsing a sha256 from a hex str")?;
+        let byte = u8::from_str_radix(byte_str, 16)
+            .context("error while parsing a sha256 from a hex str")?;
         sha256_hash[idx] = byte;
     }
 
@@ -33,18 +40,24 @@ pub(super) fn sha256_digest_from_hex(src: impl AsRef<[u8]>) -> anyhow::Result<Sh
 
 /// Converts a Tar entry's [size](Header::entry_size) to the number of Tar blocks, rounding up.
 pub(super) fn get_entry_size_in_blocks(header: &Header) -> anyhow::Result<u64> {
-    let entry_size = header.entry_size().context("failed to get the entry's file size")?;
+    let entry_size = header
+        .entry_size()
+        .context("failed to get the entry's file size")?;
     if entry_size == 0 {
         return Ok(0);
     }
 
-    Ok((entry_size / TAR_BLOCK_SIZE as u64) + (entry_size % TAR_BLOCK_SIZE as u64 != 0) as u64)
+    Ok((entry_size / TAR_BLOCK_SIZE as u64)
+        + (entry_size % TAR_BLOCK_SIZE as u64 != 0) as u64)
 }
 
 /// Determines the type of a blob by reading the first [Tar block](TAR_BLOCK_SIZE) and checking its contents.
 ///
 /// Returns the determined [BlobType] and the number of bytes that were read from the provided reader.
-pub(super) fn determine_blob_type<R: Read>(buf: &mut [u8], src: &mut R) -> anyhow::Result<(BlobType, usize)> {
+pub(super) fn determine_blob_type<R: Read>(
+    buf: &mut [u8],
+    src: &mut R,
+) -> anyhow::Result<(BlobType, usize)> {
     let mut filled = 0;
 
     while filled != buf.len() {
@@ -64,11 +77,17 @@ pub(super) fn determine_blob_type<R: Read>(buf: &mut [u8], src: &mut R) -> anyho
                 }
             }
             1.. => {
-                if filled == TAR_BLOCK_SIZE && buf.iter().all(|byte| *byte == 0) {
+                if filled == TAR_BLOCK_SIZE && buf.iter().all(|byte| *byte == 0)
+                {
                     BlobType::Empty
-                } else if filled >= TAR_MAGIC_NUMBER_START_IDX + TAR_MAGIC_NUMBER.len() && has_tar_magic_number(&buf) {
+                } else if filled
+                    >= TAR_MAGIC_NUMBER_START_IDX + TAR_MAGIC_NUMBER.len()
+                    && has_tar_magic_number(&buf)
+                {
                     BlobType::Tar
-                } else if filled >= GZIP_MAGIC_NUMBER.len() && buf.starts_with(&GZIP_MAGIC_NUMBER) {
+                } else if filled >= GZIP_MAGIC_NUMBER.len()
+                    && buf.starts_with(&GZIP_MAGIC_NUMBER)
+                {
                     BlobType::GzippedTar
                 } else if filled == TAR_BLOCK_SIZE {
                     // We read a single tar block and weren't able to match this layer to any other type, so it must be a JSON
@@ -90,7 +109,9 @@ pub(super) fn determine_blob_type<R: Read>(buf: &mut [u8], src: &mut R) -> anyho
 fn has_tar_magic_number(buf: impl AsRef<[u8]>) -> bool {
     let buf = buf.as_ref();
     if buf.len() < TAR_MAGIC_NUMBER_START_IDX + TAR_MAGIC_NUMBER.len()
-        || &buf[TAR_MAGIC_NUMBER_START_IDX..TAR_MAGIC_NUMBER_START_IDX + TAR_MAGIC_NUMBER.len()] != TAR_MAGIC_NUMBER
+        || &buf[TAR_MAGIC_NUMBER_START_IDX
+            ..TAR_MAGIC_NUMBER_START_IDX + TAR_MAGIC_NUMBER.len()]
+            != TAR_MAGIC_NUMBER
     {
         return false;
     }

@@ -77,9 +77,15 @@ impl Unit {
         let bytes = bytes.into();
         match bytes {
             0..Self::KILOBYTE => (bytes as f64, Self::Bytes),
-            Self::KILOBYTE..Self::MEGABYTE => ((bytes as f64) / (Self::KILOBYTE as f64), Self::Kilobytes),
-            Self::MEGABYTE..Self::GIGABYTE => ((bytes as f64) / (Self::MEGABYTE as f64), Self::Megabytes),
-            Self::GIGABYTE.. => ((bytes as f64) / (Self::GIGABYTE as f64), Self::Gigabytes),
+            Self::KILOBYTE..Self::MEGABYTE => {
+                ((bytes as f64) / (Self::KILOBYTE as f64), Self::Kilobytes)
+            }
+            Self::MEGABYTE..Self::GIGABYTE => {
+                ((bytes as f64) / (Self::MEGABYTE as f64), Self::Megabytes)
+            }
+            Self::GIGABYTE.. => {
+                ((bytes as f64) / (Self::GIGABYTE as f64), Self::Gigabytes)
+            }
         }
     }
 }
@@ -94,7 +100,10 @@ pub(crate) fn encode_hex(digest: impl AsRef<[u8]>) -> String {
 }
 
 /// Copies the provided [data] into [Clipboard] if it's present.
-pub(crate) fn copy_to_clipboard(clipboard: Option<&mut Clipboard>, data: std::borrow::Cow<'_, str>) {
+pub(crate) fn copy_to_clipboard(
+    clipboard: Option<&mut Clipboard>,
+    data: std::borrow::Cow<'_, str>,
+) {
     if let Some(clipboard) = clipboard {
         if let Err(e) = clipboard.set_text(data) {
             tracing::debug!("Failed to copy text to the clipboard: {}", e);
@@ -106,10 +115,20 @@ pub(crate) fn copy_to_clipboard(clipboard: Option<&mut Clipboard>, data: std::bo
 ///
 /// Returns an array that contains upper left, middle left, lower left, and right [Rect], as well as a single [Rect] below them to render a command bar.
 pub(crate) fn split_layout(initial_area: Rect) -> (PaneAreas, CommandBarArea) {
-    let [main, command_bar] = Layout::vertical([Constraint::Percentage(100), Constraint::Min(1)]).areas(initial_area);
-    let [left, right] = Layout::horizontal([Constraint::Percentage(35), Constraint::Percentage(70)]).areas(main);
-    let [upper_left, middle_left, lower_left] =
-        Layout::vertical([Constraint::Min(8), Constraint::Min(10), Constraint::Percentage(100)]).areas(left);
+    let [main, command_bar] =
+        Layout::vertical([Constraint::Percentage(100), Constraint::Min(1)])
+            .areas(initial_area);
+    let [left, right] = Layout::horizontal([
+        Constraint::Percentage(35),
+        Constraint::Percentage(70),
+    ])
+    .areas(main);
+    let [upper_left, middle_left, lower_left] = Layout::vertical([
+        Constraint::Min(8),
+        Constraint::Min(10),
+        Constraint::Percentage(100),
+    ])
+    .areas(left);
 
     ([upper_left, middle_left, lower_left, right], command_bar)
 }

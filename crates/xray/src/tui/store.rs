@@ -58,10 +58,14 @@ impl AppState {
     }
 
     /// Returns a reference to the currently selected [Layer], its [Sha256Digest], and index.
-    pub fn get_selected_layer(&self) -> anyhow::Result<(&Sha256Digest, &Layer, usize)> {
+    pub fn get_selected_layer(
+        &self,
+    ) -> anyhow::Result<(&Sha256Digest, &Layer, usize)> {
         let layer_selector_pane_idx: usize = ActivePane::LayerSelector.into();
         let (layer_selector_pane, _) = &self.panes[layer_selector_pane_idx];
-        let selected_layer_idx = if let Some(Pane::LayerSelector(pane)) = layer_selector_pane {
+        let selected_layer_idx = if let Some(Pane::LayerSelector(pane)) =
+            layer_selector_pane
+        {
             pane.selected_layer_idx()
         } else {
             anyhow::bail!("layer selector pane is no longer at the expected position in the UI");
@@ -74,7 +78,9 @@ impl AppState {
     }
 
     /// Returns a reference to the aggregated [LayerChangeSet] of the currently selected layer and all the layers before it.
-    pub fn get_aggregated_layers_changeset(&self) -> anyhow::Result<(&LayerChangeSet, usize)> {
+    pub fn get_aggregated_layers_changeset(
+        &self,
+    ) -> anyhow::Result<(&LayerChangeSet, usize)> {
         let layer_selector_pane_idx: usize = ActivePane::LayerSelector.into();
         let (layer_selector_pane, _) = &self.panes[layer_selector_pane_idx];
         if let Some(Pane::LayerSelector(pane)) = layer_selector_pane {
@@ -89,7 +95,12 @@ impl AppState {
         self.panes
             .get(Into::<usize>::into(self.active_pane))
             .and_then(|(pane, _)| pane.as_ref())
-            .with_context(|| format!("bug: pane {:?} is no longer at its expected place", self.active_pane))
+            .with_context(|| {
+                format!(
+                    "bug: pane {:?} is no longer at its expected place",
+                    self.active_pane
+                )
+            })
     }
 
     /// Returns a mutable reference to the currently selected [Pane].
@@ -97,16 +108,23 @@ impl AppState {
         self.panes
             .get_mut(Into::<usize>::into(self.active_pane))
             .and_then(|(pane, _)| pane.as_mut())
-            .with_context(|| format!("bug: pane {:?} is no longer at its expected place", self.active_pane))
+            .with_context(|| {
+                format!(
+                    "bug: pane {:?} is no longer at its expected place",
+                    self.active_pane
+                )
+            })
     }
 
     /// A hook that applies the filters to the current changeset and should be called whenever the aggregated layer changeset is updated.
     fn on_changeset_updated(&mut self) -> anyhow::Result<()> {
         let layer_inspector_pane_idx: usize = ActivePane::LayerInspector.into();
-        let (layer_inspector_pane_opt, _) = &mut self.panes[layer_inspector_pane_idx];
+        let (layer_inspector_pane_opt, _) =
+            &mut self.panes[layer_inspector_pane_idx];
         let mut layer_inspector_pane = layer_inspector_pane_opt.take();
 
-        if let Some(Pane::LayerInspector(pane)) = layer_inspector_pane.as_mut() {
+        if let Some(Pane::LayerInspector(pane)) = layer_inspector_pane.as_mut()
+        {
             // Reset state
             pane.reset();
 
@@ -118,17 +136,24 @@ impl AppState {
         }
 
         // Return the pane back
-        let (layer_inspector_pane_opt, _) = &mut self.panes[layer_inspector_pane_idx];
-        layer_inspector_pane_opt.replace(layer_inspector_pane.expect("unreacheable"));
+        let (layer_inspector_pane_opt, _) =
+            &mut self.panes[layer_inspector_pane_idx];
+        layer_inspector_pane_opt
+            .replace(layer_inspector_pane.expect("unreacheable"));
 
         Ok(())
     }
 
     /// Applies a [SideEffect] produced while [handling](Store::handle) an [action](AppAction).
-    fn apply_side_effect(&mut self, side_effect: SideEffect) -> anyhow::Result<()> {
+    fn apply_side_effect(
+        &mut self,
+        side_effect: SideEffect,
+    ) -> anyhow::Result<()> {
         match side_effect {
             // Both side effects lead to the same actions and are handled by the same handler
-            SideEffect::ChangesetUpdated | SideEffect::FiltersUpdated => self.on_changeset_updated()?,
+            SideEffect::ChangesetUpdated | SideEffect::FiltersUpdated => {
+                self.on_changeset_updated()?
+            }
         }
         Ok(())
     }
@@ -142,7 +167,8 @@ impl Store for AppState {
             AppAction::Empty((width, height)) => {
                 tracing::trace!("Received an empty event");
 
-                let (pane_areas, command_bar) = split_layout(Rect::new(0, 0, width, height));
+                let (pane_areas, command_bar) =
+                    split_layout(Rect::new(0, 0, width, height));
 
                 debug_assert_eq!(
                     pane_areas.len(),
@@ -158,19 +184,28 @@ impl Store for AppState {
                 // Update the command bar's area
                 self.command_bar_area = command_bar;
             }
-            AppAction::TogglePane(direction) if !self.show_help_popup => self.active_pane.toggle(direction),
-            action @ (AppAction::Interact | AppAction::Move(..) | AppAction::Scroll(..)) if !self.show_help_popup => {
+            AppAction::TogglePane(direction) if !self.show_help_popup => {
+                self.active_pane.toggle(direction)
+            }
+            action @ (AppAction::Interact
+            | AppAction::Move(..)
+            | AppAction::Scroll(..))
+                if !self.show_help_popup =>
+            {
                 let active_pane_idx = Into::<usize>::into(self.active_pane);
                 // HACK: take the pane here in order to be able to provide a reference to the state when handling the action.
                 let (active_pane, _) = &mut self.panes[active_pane_idx];
-                let mut active_pane = active_pane
-                    .take()
-                    .with_context(|| format!("bug: forgot to return the {active_pane_idx} pane?"))?;
+                let mut active_pane =
+                    active_pane.take().with_context(|| {
+                        format!(
+                            "bug: forgot to return the {active_pane_idx} pane?"
+                        )
+                    })?;
                 let side_effect: Option<SideEffect> = match action {
                     AppAction::Interact => {
-                        active_pane
-                            .interact_within_pane(self)
-                            .context("error while handling the 'interact' action")?;
+                        active_pane.interact_within_pane(self).context(
+                            "error while handling the 'interact' action",
+                        )?;
                         None
                     }
                     AppAction::Move(direction) => active_pane
@@ -179,7 +214,9 @@ impl Store for AppState {
                     AppAction::Scroll(direction) => {
                         active_pane
                             .scroll_within_pane(direction, self)
-                            .context("error while handling the 'scroll' action")?;
+                            .context(
+                                "error while handling the 'scroll' action",
+                            )?;
                         None
                     }
                     _ => unreachable!("Checked above"),
@@ -202,7 +239,9 @@ impl Store for AppState {
 
                 // HACK: take the clipboard here to avoid fighting the borrow checker in the next block
                 let mut clipboard = self.clipboard.take();
-                if let Some(text_to_copy) = self.get_active_pane()?.get_selected_field(self) {
+                if let Some(text_to_copy) =
+                    self.get_active_pane()?.get_selected_field(self)
+                {
                     copy_to_clipboard(clipboard.as_mut(), text_to_copy);
                 }
                 // Return the clipboard where it belongs
@@ -216,7 +255,8 @@ impl Store for AppState {
                 .select(index)
                 .context("failed to select a pane by index")?,
             AppAction::ToggleInputMode => {
-                let (is_in_insert_mode, side_effect) = self.get_active_pane_mut()?.toggle_input_mode();
+                let (is_in_insert_mode, side_effect) =
+                    self.get_active_pane_mut()?.toggle_input_mode();
                 if let Some(side_effect) = side_effect {
                     self.apply_side_effect(side_effect)?;
                 }

@@ -11,15 +11,14 @@ pub fn formatted_index_derive(input: TokenStream) -> TokenStream {
     let name = &input.ident;
 
     // Only work with enums
-    let data_enum = match input.data {
-        Data::Enum(data_enum) => data_enum,
-        _ => {
-            return quote! {
+    let data_enum =
+        match input.data {
+            Data::Enum(data_enum) => data_enum,
+            _ => return quote! {
                 compile_error!("FormattedIndex can only be derived for enums");
             }
-            .into()
-        }
-    };
+            .into(),
+        };
 
     // Generate match arms for each variant
     let variants = data_enum.variants.iter().enumerate().map(|(i, variant)| {

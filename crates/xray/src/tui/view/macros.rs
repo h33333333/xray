@@ -72,7 +72,12 @@ macro_rules! render_order_enum {
 macro_rules! sort_fields_by_render_order {
     ( $order_enum:ident ) => {
         impl $order_enum {
-            fn sort_fields_by_order(fields: &mut [$crate::tui::view::pane::util::Field<'_, $order_enum>]) {
+            fn sort_fields_by_order(
+                fields: &mut [$crate::tui::view::pane::util::Field<
+                    '_,
+                    $order_enum,
+                >],
+            ) {
                 fields.sort_by(|(a, _), (b, _)| a.cmp(b))
             }
         }

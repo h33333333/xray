@@ -25,10 +25,12 @@ where
     ///
     /// Also notifies the [Dispatcher::view] about the change so that it may update accordinglyfor.
     pub fn dispatch(&mut self, action: S::Action) -> anyhow::Result<()> {
-        self.store.handle(action).context("failed to handle the action")?;
-        self.view
-            .on_update(&self.store)
-            .context("failed to update the view with the latest data from the store")
+        self.store
+            .handle(action)
+            .context("failed to handle the action")?;
+        self.view.on_update(&self.store).context(
+            "failed to update the view with the latest data from the store",
+        )
     }
 
     /// Returns a reference to the [Store] of this dispatcher.

@@ -26,7 +26,9 @@ impl<'a> TreeIter<'a> {
         let mut queue = VecDeque::new();
 
         if let Some(children) = node.inner.children() {
-            queue.extend(children.iter().map(|(path, node)| (node, path.as_ref(), 0)));
+            queue.extend(
+                children.iter().map(|(path, node)| (node, path.as_ref(), 0)),
+            );
         } else {
             // The node tree consists of a single file node.
             queue.push_back((node, Path::new("."), 0));
@@ -39,7 +41,9 @@ impl<'a> TreeIter<'a> {
     }
 
     pub(super) fn is_level_active(&self, level: usize) -> Option<bool> {
-        self.active_levels.as_ref().map(|levels| levels.contains(&level))
+        self.active_levels
+            .as_ref()
+            .map(|levels| levels.contains(&level))
     }
 }
 

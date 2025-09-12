@@ -87,7 +87,9 @@ impl std::fmt::Debug for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut iter = self.iter_with_levels();
         loop {
-            let Some((path, _, depth, _)) = iter.next() else { break };
+            let Some((path, _, depth, _)) = iter.next() else {
+                break;
+            };
             for level in 0..depth {
                 if iter.is_level_active(level).unwrap_or_default() {
                     write!(f, "│   ")?;

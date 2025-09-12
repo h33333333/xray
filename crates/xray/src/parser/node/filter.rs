@@ -48,7 +48,9 @@ impl<'a, 'r> NodeFilters<'a, 'r> {
 
     /// Returns true if any supported filter is set.
     pub fn any(&self) -> bool {
-        self.path_filter.is_some() || self.node_size_filter.is_some() || self.path_regex.is_some()
+        self.path_filter.is_some()
+            || self.node_size_filter.is_some()
+            || self.path_regex.is_some()
     }
 
     /// Strips the leading slash from the path filter if it's present.

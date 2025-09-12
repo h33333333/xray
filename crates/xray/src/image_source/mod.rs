@@ -41,7 +41,11 @@ pub fn resolve_image_from_config(config: &Config) -> anyhow::Result<Image> {
                     source.name(),
                     e
                 );
-                let error_with_context = e.chain().map(|e| format!("{e}")).collect::<Vec<_>>().join(": ");
+                let error_with_context = e
+                    .chain()
+                    .map(|e| format!("{e}"))
+                    .collect::<Vec<_>>()
+                    .join(": ");
                 errors.push((source.name(), error_with_context));
             }
         }
