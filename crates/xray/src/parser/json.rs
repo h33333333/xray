@@ -29,9 +29,9 @@ impl DockerManifest {
             // Docker manifest contains an array of manifest objects, so we need a vec here
             serde_json::from_reader::<_, Vec<DockerManifest>>(src).context("failed to parse the Docker's manifest")?;
 
-        Ok(manifest
-            .get_mut(0)
-            .and_then(|manifest| manifest.repo_tags.as_mut().and_then(|tags| tags.pop())))
+        Ok(manifest.get_mut(0).and_then(|manifest| {
+            manifest.repo_tags.as_mut().and_then(|tags| tags.pop())
+        }))
     }
 }
 
@@ -87,8 +87,12 @@ where
     impl Visitor<'_> for Sha256HashVisitor {
         type Value = Sha256Digest;
 
-        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-            formatter.write_str("a sha256 digest string prefixed with `sha256:`")
+        fn expecting(
+            &self,
+            formatter: &mut std::fmt::Formatter,
+        ) -> std::fmt::Result {
+            formatter
+                .write_str("a sha256 digest string prefixed with `sha256:`")
         }
 
         fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
@@ -100,10 +104,14 @@ where
 
             // multiply by 2 because we are dealing with a hex str
             if raw.len() != SHA256_DIGEST_LENGTH * 2 {
-                return Err(serde::de::Error::custom("Invalid sha256 digest format"));
+                return Err(serde::de::Error::custom(
+                    "Invalid sha256 digest format",
+                ));
             }
 
-            sha256_digest_from_hex(raw).map_err(|_| serde::de::Error::custom("Failed to parse the sha256 digest"))
+            sha256_digest_from_hex(raw).map_err(|_| {
+                serde::de::Error::custom("Failed to parse the sha256 digest")
+            })
         }
     }
 

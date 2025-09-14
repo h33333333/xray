@@ -19,11 +19,14 @@ impl ContextMetadata {
     /// Tries to read the provided [DockerConfig]'s current context metadata from the resolved context metadata directory.
     ///
     /// Will return [Option::None] if provided [DockerConfig] doesn't have current context.
-    pub fn new_from_docker_config(docker_config: &DockerConfig) -> Result<Option<Self>> {
-        let mut metadata_dir = match docker_config.get_current_context_metadata_dir() {
-            Some(dir) => dir,
-            None => return Ok(None),
-        };
+    pub fn new_from_docker_config(
+        docker_config: &DockerConfig,
+    ) -> Result<Option<Self>> {
+        let mut metadata_dir =
+            match docker_config.get_current_context_metadata_dir() {
+                Some(dir) => dir,
+                None => return Ok(None),
+            };
         metadata_dir.push(Self::FILENAME);
 
         let current_context = docker_config

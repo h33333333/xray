@@ -20,7 +20,11 @@ impl ChunkProcessor {
     /// Processes the data available in the provided source buffer and writes it to the destination buffer.
     ///
     /// Returns `true` if there is more data to be read.
-    pub fn process_available_data(&mut self, mut src: &[u8], dst: &mut Vec<u8>) -> Result<bool> {
+    pub fn process_available_data(
+        &mut self,
+        mut src: &[u8],
+        dst: &mut Vec<u8>,
+    ) -> Result<bool> {
         let should_continue = loop {
             if self.state.is_done() {
                 break false;
@@ -33,7 +37,8 @@ impl ChunkProcessor {
                 break true;
             }
 
-            let (need_more_data, offset, bytes_to_skip) = self.state.advance(src, dst)?;
+            let (need_more_data, offset, bytes_to_skip) =
+                self.state.advance(src, dst)?;
             if need_more_data {
                 // Need more data to continue the processing
                 break true;
@@ -81,7 +86,11 @@ impl ChunkProcessorState {
     ///
     /// Returns a boolean that indicates whether it requires more data to continue, the new offset into the provided source buffer, and the number of bytes that need
     /// to be skipped before the next viable data.
-    fn advance(&mut self, src: &[u8], dst: &mut Vec<u8>) -> Result<(bool, usize, Option<usize>)> {
+    fn advance(
+        &mut self,
+        src: &[u8],
+        dst: &mut Vec<u8>,
+    ) -> Result<(bool, usize, Option<usize>)> {
         match self {
             Self::ReadyForChunkSize => {
                 *self = Self::PartialChunkSize(0);
@@ -92,14 +101,18 @@ impl ChunkProcessorState {
                     return Ok((true, 0, None));
                 }
 
-                let chunk_size_end_pos = src.iter().position(|byte| *byte == b'\r');
+                let chunk_size_end_pos =
+                    src.iter().position(|byte| *byte == b'\r');
                 let size_is_complete = chunk_size_end_pos.is_some();
-                let chunk_size_end_pos = chunk_size_end_pos.unwrap_or(src.len());
+                let chunk_size_end_pos =
+                    chunk_size_end_pos.unwrap_or(src.len());
 
                 let chunk_size_bytes = &src[..chunk_size_end_pos];
                 for byte in chunk_size_bytes {
-                    let digit = hex_digit_to_value(*byte)
-                        .ok_or(DockerError::Other("got an invalid digit in HTTP chunk size".into()))?;
+                    let digit =
+                        hex_digit_to_value(*byte).ok_or(DockerError::Other(
+                            "got an invalid digit in HTTP chunk size".into(),
+                        ))?;
                     *size = add_base16_digit(*size, digit);
                 }
 
@@ -114,7 +127,11 @@ impl ChunkProcessorState {
                     ChunkProcessorState::RemainingChunkSize(*size)
                 };
 
-                let bytes_to_skip = if self.is_done() { 0 } else { CRLF_DELIMITER_SIZE };
+                let bytes_to_skip = if self.is_done() {
+                    0
+                } else {
+                    CRLF_DELIMITER_SIZE
+                };
                 Ok((false, chunk_size_end_pos, Some(bytes_to_skip)))
             }
             Self::RemainingChunkSize(size) => {

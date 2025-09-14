@@ -12,7 +12,10 @@ pub struct PaneWithPopup<W, P> {
 }
 
 impl<W, P> PaneWithPopup<W, P> {
-    pub fn new(pane: Option<W>, popup: Option<(P, Option<Constraint>, Option<Constraint>)>) -> Self {
+    pub fn new(
+        pane: Option<W>,
+        popup: Option<(P, Option<Constraint>, Option<Constraint>)>,
+    ) -> Self {
         PaneWithPopup { pane, popup }
     }
 
@@ -22,18 +25,28 @@ impl<W, P> PaneWithPopup<W, P> {
     }
 
     /// Sets a popup that should be rendered on [Widget::Render].
-    pub fn set_popup(&mut self, popup: (P, Option<Constraint>, Option<Constraint>)) {
+    pub fn set_popup(
+        &mut self,
+        popup: (P, Option<Constraint>, Option<Constraint>),
+    ) {
         self.popup = Some(popup);
     }
 }
 
 impl<W: Widget, P: Widget> Widget for PaneWithPopup<W, P> {
-    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer) {
+    fn render(
+        self,
+        area: ratatui::prelude::Rect,
+        buf: &mut ratatui::prelude::Buffer,
+    ) {
         if let Some(pane) = self.pane {
             pane.render(area, buf);
         }
-        if let Some((popup, vertical_constraint, horizontal_constraint)) = self.popup {
-            let area = popup_area(area, vertical_constraint, horizontal_constraint);
+        if let Some((popup, vertical_constraint, horizontal_constraint)) =
+            self.popup
+        {
+            let area =
+                popup_area(area, vertical_constraint, horizontal_constraint);
             // Clear the area
             Clear.render(area, buf);
             popup.render(area, buf);

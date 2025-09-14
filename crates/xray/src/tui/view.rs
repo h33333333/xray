@@ -12,7 +12,7 @@ pub use active_pane::ActivePane;
 use anyhow::Context;
 use command_bar::CommandBar;
 use help_popup::HelpPopup;
-pub use pane::{init_panes, Pane};
+pub use pane::{Pane, init_panes};
 use ratatui::layout::{Constraint, Flex, Layout, Rect};
 use ratatui::widgets::Clear;
 use ratatui::{DefaultTerminal, Frame};
@@ -95,16 +95,22 @@ fn render(frame: &mut Frame, state: &AppState) -> anyhow::Result<()> {
 
     // Render the command bar
     frame.render_widget(
-        CommandBar::render(state).context("failed to redner the command bar")?,
+        CommandBar::render(state)
+            .context("failed to redner the command bar")?,
         state.command_bar_area,
     );
 
     // Render the help popup if it's active
     if state.show_help_popup {
-        let popup_area = popup_area(frame.area(), Some(Constraint::Length(22)), Some(Constraint::Length(75)));
+        let popup_area = popup_area(
+            frame.area(),
+            Some(Constraint::Length(23)),
+            Some(Constraint::Length(75)),
+        );
         clear_area(frame, popup_area);
         frame.render_widget(
-            HelpPopup::render(state).context("failed to render the help popup")?,
+            HelpPopup::render(state)
+                .context("failed to render the help popup")?,
             popup_area,
         );
     }
@@ -120,7 +126,8 @@ fn popup_area(
 ) -> Rect {
     let vertical = Layout::vertical(vertical_constraints).flex(Flex::Center);
     let [area] = vertical.areas(area);
-    let horizontal = Layout::horizontal(horizontal_constraint).flex(Flex::Center);
+    let horizontal =
+        Layout::horizontal(horizontal_constraint).flex(Flex::Center);
     let [area] = horizontal.areas(area);
     area
 }

@@ -14,7 +14,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use constants::{
-    BLOB_PATH_PREFIX, IMAGE_INDEX_PATH, IMAGE_MANIFEST_PATH, SHA256_DIGEST_LENGTH, TAR_BLOCK_SIZE, TAR_MAGIC_NUMBER,
+    BLOB_PATH_PREFIX, IMAGE_INDEX_PATH, IMAGE_MANIFEST_PATH,
+    SHA256_DIGEST_LENGTH, TAR_BLOCK_SIZE, TAR_MAGIC_NUMBER,
     TAR_MAGIC_NUMBER_START_IDX,
 };
 use flate2::read::GzDecoder;
@@ -25,7 +26,9 @@ use node::{InnerNode, Node, RestorablePath};
 use seeker::SeekerWithOffset;
 use serde::de::DeserializeOwned;
 use tar::{Archive, Header};
-use util::{determine_blob_type, get_entry_size_in_blocks, sha256_digest_from_hex};
+use util::{
+    determine_blob_type, get_entry_size_in_blocks, sha256_digest_from_hex,
+};
 
 pub type Sha256Digest = [u8; SHA256_DIGEST_LENGTH];
 pub type LayerChangeSet = Node;
@@ -54,7 +57,10 @@ pub struct FileState {
 
 impl FileState {
     pub fn new(status: NodeStatus, actual_file: Option<PathBuf>) -> Self {
-        FileState { status, actual_file }
+        FileState {
+            status,
+            actual_file,
+        }
     }
 }
 
@@ -134,7 +140,10 @@ impl Parser {
     }
 
     /// Parses an OCI-compliant container image from the provided image Tar blob.
-    pub fn parse_image<R: Read + Seek>(mut self, src: R) -> anyhow::Result<Image> {
+    pub fn parse_image<R: Read + Seek>(
+        mut self,
+        src: R,
+    ) -> anyhow::Result<Image> {
         let seeker = SeekerWithOffset::new(src);
         let mut archive = Archive::new(seeker);
         let mut entries = archive
@@ -154,7 +163,9 @@ impl Parser {
             }
 
             // Parse the image's index and extract the name and tag if we don't already have them and they are present in the Index
-            if entry.header().path_bytes().as_ref() == IMAGE_INDEX_PATH && self.tagged_name.is_none() {
+            if entry.header().path_bytes().as_ref() == IMAGE_INDEX_PATH
+                && self.tagged_name.is_none()
+            {
                 let json_blob = self.parse_json_blob::<JsonBlob>(&mut entry)?;
                 if let Some(known_json_blob) = json_blob {
                     self.process_json_blob(known_json_blob);
@@ -165,10 +176,14 @@ impl Parser {
 
             let header = entry.header();
 
-            let entry_size_in_blocks =
-                get_entry_size_in_blocks(header).context("failed to determine the entry's size in TAR blocks")?;
+            let entry_size_in_blocks = get_entry_size_in_blocks(header)
+                .context(
+                    "failed to determine the entry's size in TAR blocks",
+                )?;
 
-            if !header.path_bytes().starts_with(BLOB_PATH_PREFIX) || entry_size_in_blocks == 0 {
+            if !header.path_bytes().starts_with(BLOB_PATH_PREFIX)
+                || entry_size_in_blocks == 0
+            {
                 // Skip the current entry if it's not a blob or if it's size is 0
                 continue;
             }
@@ -180,10 +195,12 @@ impl Parser {
                     // SAFETY: checked above
                     .expect("should start with a blob path prefix"),
             )
-            .context("failed to parse the layer's sha256 digest from the path")?;
+            .context(
+                "failed to parse the layer's sha256 digest from the path",
+            )?;
 
-            let (blob_type, offset) =
-                determine_blob_type(&mut buf, &mut entry).context("failed to determine the blob type of an entry")?;
+            let (blob_type, offset) = determine_blob_type(&mut buf, &mut entry)
+                .context("failed to determine the blob type of an entry")?;
 
             match blob_type {
                 BlobType::Empty => {}
@@ -202,11 +219,16 @@ impl Parser {
                     // Mark offset before constructing a new archive inside the next function
                     reader.mark_offset();
                     let (layer_changeset, layer_size) = self
-                        .parse_tar_blob(&mut reader, entry_size_in_blocks * TAR_BLOCK_SIZE as u64)
+                        .parse_tar_blob(
+                            &mut reader,
+                            entry_size_in_blocks * TAR_BLOCK_SIZE as u64,
+                        )
                         .context("error while parsing a tar layer")?;
 
-                    self.parsed_layers
-                        .insert(layer_sha256_digest, (layer_changeset, layer_size));
+                    self.parsed_layers.insert(
+                        layer_sha256_digest,
+                        (layer_changeset, layer_size),
+                    );
 
                     // Mark offset before restoring the outer archive below
                     reader.mark_offset();
@@ -220,17 +242,23 @@ impl Parser {
                     let (layer_changeset, layer_size) = self
                         .parse_gzip_tar_blob(&mut gzip_blob)
                         .context("error while parsing a gzipped tar layer")?;
-                    self.parsed_layers
-                        .insert(layer_sha256_digest, (layer_changeset, layer_size));
+                    self.parsed_layers.insert(
+                        layer_sha256_digest,
+                        (layer_changeset, layer_size),
+                    );
                 }
                 BlobType::Json => {
-                    let json_blob = self.parse_json_blob::<JsonBlob>(&mut buf[..offset].chain(entry))?;
+                    let json_blob = self.parse_json_blob::<JsonBlob>(
+                        &mut buf[..offset].chain(entry),
+                    )?;
                     if let Some(known_json_blob) = json_blob {
                         self.process_json_blob(known_json_blob);
                     };
                 }
                 BlobType::Unknown => {
-                    tracing::debug!("Unknown blob type was encountered while parsing the image")
+                    tracing::debug!(
+                        "Unknown blob type was encountered while parsing the image"
+                    )
                 }
             }
         }
@@ -239,7 +267,10 @@ impl Parser {
     }
 
     /// Parses a single JSON blob within the image.
-    fn parse_json_blob<T: DeserializeOwned>(&self, entry: &mut impl Read) -> anyhow::Result<Option<T>> {
+    fn parse_json_blob<T: DeserializeOwned>(
+        &self,
+        entry: &mut impl Read,
+    ) -> anyhow::Result<Option<T>> {
         let parsed = match serde_json::from_reader::<_, T>(entry) {
             Ok(parsed) => Some(parsed),
             Err(e) => {
@@ -257,7 +288,9 @@ impl Parser {
     /// Processes a single known JSON blob extracted from an image.
     fn process_json_blob(&mut self, json_blob: JsonBlob) {
         match json_blob {
-            JsonBlob::Manifest { layers: parsed_layers } => {
+            JsonBlob::Manifest {
+                layers: parsed_layers,
+            } => {
                 self.layer_configs = Some(parsed_layers);
             }
             JsonBlob::Config {
@@ -272,11 +305,18 @@ impl Parser {
             JsonBlob::Index {
                 manifests: parsed_manifests,
             } => {
-                for annotations in parsed_manifests.into_iter().flat_map(|manifest| manifest.annotations) {
-                    if let Some(mut image_ref) = annotations.fully_qualified_image_name {
-                        if let Some(image_name_start_pos) = image_ref.rfind('/') {
+                for annotations in parsed_manifests
+                    .into_iter()
+                    .flat_map(|manifest| manifest.annotations)
+                {
+                    if let Some(mut image_ref) =
+                        annotations.fully_qualified_image_name
+                    {
+                        if let Some(image_name_start_pos) = image_ref.rfind('/')
+                        {
                             // Remove the registry if present
-                            image_ref.replace_range(0..=image_name_start_pos, "");
+                            image_ref
+                                .replace_range(0..=image_name_start_pos, "");
                         }
 
                         self.tagged_name = Some(image_ref);
@@ -306,7 +346,8 @@ impl Parser {
             .entries_with_seek()
             .context("failed to get entries from the tar blob")?
         {
-            let entry = entry.context("error while reading an entry from the tar blob")?;
+            let entry = entry
+                .context("error while reading an entry from the tar blob")?;
             let header = entry.header();
 
             if entry.raw_header_position() >= blob_size {
@@ -333,7 +374,10 @@ impl Parser {
     /// # Note
     ///
     /// It wraps the passed reader in a [GzDecoder] before trying to read entries from it.
-    fn parse_gzip_tar_blob<R: Read>(&self, src: &mut R) -> anyhow::Result<(LayerChangeSet, LayerSize)> {
+    fn parse_gzip_tar_blob<R: Read>(
+        &self,
+        src: &mut R,
+    ) -> anyhow::Result<(LayerChangeSet, LayerSize)> {
         let mut archive = Archive::new(GzDecoder::new(src));
 
         // We will set the actual layer idx later in [Self::finalize]
@@ -344,7 +388,9 @@ impl Parser {
             .entries()
             .context("failed to get entries from the gzipped tar blob")?
         {
-            let entry = entry.context("error while reading an entry from the gzipped tar blob")?;
+            let entry = entry.context(
+                "error while reading an entry from the gzipped tar blob",
+            )?;
             let header = entry.header();
 
             layer_size += self
@@ -388,9 +434,15 @@ impl Parser {
     /// Processes a TAR header of a single entry (a Node) in a layer.
     ///
     /// Returns the entry's full path, as well as its status and size.
-    fn process_layer_entry<'a>(&self, header: &'a Header) -> anyhow::Result<Option<(Cow<'a, Path>, InnerNode, u64)>> {
+    fn process_layer_entry<'a>(
+        &self,
+        header: &'a Header,
+    ) -> anyhow::Result<Option<(Cow<'a, Path>, InnerNode, u64)>> {
         let Ok(path) = header.path() else {
-            tracing::debug!(?header, "Got a malformed header when parsing an image");
+            tracing::debug!(
+                ?header,
+                "Got a malformed header when parsing an image"
+            );
             // Don't error, continue to process the rest of the nodes as usual
             return Ok(None);
         };
@@ -407,10 +459,16 @@ impl Parser {
         let size = header.size().unwrap_or(0);
 
         // Check if it's a link
-        if let Some(link) = header.link_name().context("failed to retrieve the link name")? {
+        if let Some(link) = header
+            .link_name()
+            .context("failed to retrieve the link name")?
+        {
             return Ok(Some((
                 path,
-                InnerNode::File(FileState::new(NodeStatus::Added(0), Some(link.into_owned()))),
+                InnerNode::File(FileState::new(
+                    NodeStatus::Added(0),
+                    Some(link.into_owned()),
+                )),
                 size,
             )));
         }
@@ -420,35 +478,40 @@ impl Parser {
             return Ok(None);
         };
 
-        let (path, status) = if file_name.as_encoded_bytes().starts_with(b".wh.") {
-            // A whiteout
+        let (path, status) =
+            if file_name.as_encoded_bytes().starts_with(b".wh.") {
+                // A whiteout
 
-            // Strip the whiteout prefix
-            let path = Cow::Owned(path.with_file_name(
-                // SAFETY: this is okay, as we don't violate the conversion rules
-                unsafe {
-                    OsStr::from_encoded_bytes_unchecked(
-                        file_name
-                            .as_encoded_bytes()
-                            .strip_prefix(b".wh.")
-                            .expect("prefix must exist at this point"),
-                    )
-                },
-            ));
+                // Strip the whiteout prefix
+                let path = Cow::Owned(path.with_file_name(
+                    // SAFETY: this is okay, as we don't violate the conversion rules
+                    unsafe {
+                        OsStr::from_encoded_bytes_unchecked(
+                            file_name
+                                .as_encoded_bytes()
+                                .strip_prefix(b".wh.")
+                                .expect("prefix must exist at this point"),
+                        )
+                    },
+                ));
 
-            (path, NodeStatus::Deleted)
-        } else if file_name.as_encoded_bytes() != b".wh..wh..opq" {
-            // A regular file
-            (path, NodeStatus::Added(size))
-        } else {
-            // An opaque whiteout
+                (path, NodeStatus::Deleted)
+            } else if file_name.as_encoded_bytes() != b".wh..wh..opq" {
+                // A regular file
+                (path, NodeStatus::Added(size))
+            } else {
+                // An opaque whiteout
 
-            // FIXME: I need to mark a directory as one that contains an opaque whiteout file
-            // and then handle such directories correspondingly when merging the trees
-            return Ok(None);
-        };
+                // FIXME: I need to mark a directory as one that contains an opaque whiteout file
+                // and then handle such directories correspondingly when merging the trees
+                return Ok(None);
+            };
 
-        Ok(Some((path, InnerNode::File(FileState::new(status, None)), size)))
+        Ok(Some((
+            path,
+            InnerNode::File(FileState::new(status, None)),
+            size,
+        )))
     }
 
     /// Processes all the parsed data and turns it into an [Image].
@@ -459,17 +522,20 @@ impl Parser {
         let layer_configs = self
             .layer_configs
             .context("malformed container image: manifest is missing")?;
-        let layers_history = self.history.context("malformed container image: config is missing")?;
+        let layers_history = self
+            .history
+            .context("malformed container image: config is missing")?;
 
         let total_layers = layers_history.len();
         let non_empty_layers = layer_configs.len();
 
         let mut per_layer_changeset = self.parsed_layers;
         let mut image_size = 0;
-        for (layer_config, layer_history) in layer_configs
-            .into_iter()
-            .zip(layers_history.into_iter().filter(|entry| !entry.empty_layer))
-        {
+        for (layer_config, layer_history) in layer_configs.into_iter().zip(
+            layers_history
+                .into_iter()
+                .filter(|entry| !entry.empty_layer),
+        ) {
             let (mut layer_changeset, layer_size) = per_layer_changeset
                 .remove(&layer_config.digest)
                 .map(|(changeset, size)| (Some(changeset), size))
@@ -515,7 +581,10 @@ impl Parser {
                 name.truncate(name.len() - 1);
                 Some((Cow::Owned(name), Cow::Owned(tag)))
             })
-            .unwrap_or((Cow::Borrowed("<missing>"), Cow::Borrowed("<missing>")));
+            .unwrap_or((
+                Cow::Borrowed("<missing>"),
+                Cow::Borrowed("<missing>"),
+            ));
 
         Ok(Image {
             image_name,

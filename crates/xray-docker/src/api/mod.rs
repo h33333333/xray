@@ -6,7 +6,10 @@ mod docker_host;
 mod util;
 
 use connection::DockerApiConnection;
-use docker_host::{ContextMetadata, DEFAULT_DOCKER_HOST, DOCKER_HOST_ENV_VAR, DockerConfig, DockerHost};
+use docker_host::{
+    ContextMetadata, DEFAULT_DOCKER_HOST, DOCKER_HOST_ENV_VAR, DockerConfig,
+    DockerHost,
+};
 use http::StatusCode;
 use util::encode_request;
 
@@ -36,7 +39,11 @@ impl DockerApi {
             .header("host", "docker")
             .header("accept", "*/*")
             .body(Vec::new())
-            .map_err(|_| DockerError::Other("failed to construct the image inspect request".into()))?;
+            .map_err(|_| {
+                DockerError::Other(
+                    "failed to construct the image inspect request".into(),
+                )
+            })?;
 
         // Send the  request and receive a response
         self.buffer.clear();
@@ -48,7 +55,10 @@ impl DockerApi {
 
     /// Pulls the provided image.
     pub fn pull_image(&mut self, image: &str) -> Result<()> {
-        let tag = image.split_once(":").map(|(_, tag)| tag).unwrap_or("latest");
+        let tag = image
+            .split_once(":")
+            .map(|(_, tag)| tag)
+            .unwrap_or("latest");
         let request = http::Request::builder()
             .uri(format!("/images/create?fromImage={image}&tag={tag}"))
             .method("POST")
@@ -66,7 +76,9 @@ impl DockerApi {
 
         if status_code != http::StatusCode::OK {
             match status_code {
-                StatusCode::NOT_FOUND => Err(DockerError::Other("failed to pull the image: no such image".into())),
+                StatusCode::NOT_FOUND => Err(DockerError::Other(
+                    "failed to pull the image: no such image".into(),
+                )),
                 _ => Err(DockerError::Other("failed to pull the image".into())),
             }
         } else {
@@ -92,8 +104,12 @@ impl DockerApi {
 
         if status_code != http::StatusCode::OK {
             match status_code {
-                StatusCode::NOT_FOUND => Err(DockerError::Other("failed to export the image: no such image".into())),
-                _ => Err(DockerError::Other("failed to export the image".into())),
+                StatusCode::NOT_FOUND => Err(DockerError::Other(
+                    "failed to export the image: no such image".into(),
+                )),
+                _ => {
+                    Err(DockerError::Other("failed to export the image".into()))
+                }
             }
         } else {
             Ok(&self.buffer)
@@ -118,7 +134,8 @@ impl DockerApi {
             return Ok(DEFAULT_DOCKER_HOST.into());
         };
 
-        let context_meta = ContextMetadata::new_from_docker_config(&docker_config)?;
+        let context_meta =
+            ContextMetadata::new_from_docker_config(&docker_config)?;
         if let Some(context_meta) = context_meta {
             Ok(context_meta.into_docker_host().into())
         } else {

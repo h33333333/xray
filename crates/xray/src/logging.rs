@@ -33,20 +33,25 @@ pub fn init_logging(config_folder: &Path) -> anyhow::Result<()> {
                 .with_target(false)
                 .with_filter(LevelFilter::INFO)
                 .and_then(
-                    layer()
-                        .with_file(true)
-                        .with_line_number(true)
-                        .with_filter(filter_fn(|metadata| *metadata.level() > LevelFilter::INFO)),
+                    layer().with_file(true).with_line_number(true).with_filter(
+                        filter_fn(|metadata| {
+                            *metadata.level() > LevelFilter::INFO
+                        }),
+                    ),
                 )
                 .with_filter(env_filter),
         )
         .with(
-            layer().pretty().with_writer(log_file).with_ansi(false).with_filter(
-                EnvFilter::builder()
-                    .with_env_var(LOGGING_FILE_ENV)
-                    .try_from_env()
-                    .unwrap_or_else(|_| "xray=trace".into()),
-            ),
+            layer()
+                .pretty()
+                .with_writer(log_file)
+                .with_ansi(false)
+                .with_filter(
+                    EnvFilter::builder()
+                        .with_env_var(LOGGING_FILE_ENV)
+                        .try_from_env()
+                        .unwrap_or_else(|_| "xray=trace".into()),
+                ),
         )
         .try_init()
         .context("error while initializing the logging")

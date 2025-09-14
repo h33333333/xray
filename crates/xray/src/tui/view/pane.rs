@@ -20,10 +20,10 @@ use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::block::Title;
 use ratatui::widgets::{Block, BorderType, Paragraph, Widget, Wrap};
-use style::{text_color, ACTIVE_FIELD_STYLE, ACTIVE_INSPECTOR_NODE_STYLE};
+use style::{ACTIVE_FIELD_STYLE, ACTIVE_INSPECTOR_NODE_STYLE, text_color};
 pub(super) use style::{
-    ADDED_INSPECTOR_NODE_STYLE, DELETED_INSPECTOR_NODE_STYLE, FIELD_KEY_STYLE, FIELD_VALUE_STYLE,
-    MODIFIED_INSPECTOR_NODE_STYLE,
+    ADDED_INSPECTOR_NODE_STYLE, DELETED_INSPECTOR_NODE_STYLE, FIELD_KEY_STYLE,
+    FIELD_VALUE_STYLE, MODIFIED_INSPECTOR_NODE_STYLE,
 };
 use util::fields_into_lines;
 
@@ -57,11 +57,13 @@ impl Pane {
         pane_rows: u16,
         pane_cols: u16,
     ) -> anyhow::Result<impl Widget + 'a> {
-        let pane_is_active = state.active_pane == self.into() && !state.show_help_popup;
+        let pane_is_active =
+            state.active_pane == self.into() && !state.show_help_popup;
 
         let text_color = text_color(pane_is_active);
         // Don't override the field key's fg color unless the pane is not active.
-        let field_key_style = if pane_is_active && FIELD_KEY_STYLE.fg.is_some() {
+        let field_key_style = if pane_is_active && FIELD_KEY_STYLE.fg.is_some()
+        {
             FIELD_KEY_STYLE
         } else {
             FIELD_KEY_STYLE.fg(text_color)
@@ -84,7 +86,9 @@ impl Pane {
                     field_key_style,
                     field_value_style,
                     |field_key| {
-                        if pane_state.active_field == field_key && pane_is_active {
+                        if pane_state.active_field == field_key
+                            && pane_is_active
+                        {
                             active_field_style
                         } else {
                             Style::default()
@@ -95,7 +99,12 @@ impl Pane {
                 Paragraph::new(Text::from(lines)).block(block)
             }
             Pane::LayerSelector(pane_state) => {
-                let lines = pane_state.lines(state.layers.iter(), field_value_style, remaining_rows, remaining_cols);
+                let lines = pane_state.lines(
+                    state.layers.iter(),
+                    field_value_style,
+                    remaining_rows,
+                    remaining_cols,
+                );
 
                 Paragraph::new(Text::from(lines)).block(block)
             }
@@ -105,11 +114,16 @@ impl Pane {
                     .context("failed to get the currently selected layer")?;
 
                 let lines = fields_into_lines(
-                    LayerInfoPane::get_fields(selected_layer_digest, selected_layer),
+                    LayerInfoPane::get_fields(
+                        selected_layer_digest,
+                        selected_layer,
+                    ),
                     field_key_style,
                     field_value_style,
                     |field_key| {
-                        if pane_state.active_field == field_key && pane_is_active {
+                        if pane_state.active_field == field_key
+                            && pane_is_active
+                        {
                             active_field_style
                         } else {
                             Style::default()
@@ -119,22 +133,30 @@ impl Pane {
 
                 // FIXME: add a vertical scroll
                 // - this requires doing wrap manually, as there is no way to know how many lines will the wrapped text take
-                Paragraph::new(Text::from(lines)).wrap(Wrap { trim: true }).block(block)
+                Paragraph::new(Text::from(lines))
+                    .wrap(Wrap { trim: true })
+                    .block(block)
             }
             Pane::LayerInspector(pane_state) => {
-                let (layer_changeset, _) = state.get_aggregated_layers_changeset()?;
+                let (layer_changeset, _) =
+                    state.get_aggregated_layers_changeset()?;
                 let (_, _, current_layer_idx) = state.get_selected_layer()?;
 
                 let lines = pane_state
                     .changeset_to_lines(
                         layer_changeset,
-                        |node_is_active, node_updated_in, node_is_deleted, node_is_modified| {
+                        |node_is_active,
+                         node_updated_in,
+                         node_is_deleted,
+                         node_is_modified| {
                             if !pane_is_active {
                                 return field_value_style;
                             }
                             if node_is_active {
                                 ACTIVE_INSPECTOR_NODE_STYLE
-                            } else if node_updated_in == current_layer_idx as u8 && current_layer_idx != 0 {
+                            } else if node_updated_in == current_layer_idx as u8
+                                && current_layer_idx != 0
+                            {
                                 if node_is_deleted {
                                     DELETED_INSPECTOR_NODE_STYLE
                                 } else if node_is_modified {
@@ -151,8 +173,13 @@ impl Pane {
                     .context("layer inspector: failed to render a changeset")?;
 
                 if let Some(filter_popup) = pane_state.filter_popup() {
-                    let (popup, v_constraint, h_constraint) = filter_popup.render_with_layout_constraints();
-                    widget.set_popup((popup, Some(v_constraint), Some(h_constraint)));
+                    let (popup, v_constraint, h_constraint) =
+                        filter_popup.render_with_layout_constraints();
+                    widget.set_popup((
+                        popup,
+                        Some(v_constraint),
+                        Some(h_constraint),
+                    ));
                 }
 
                 // FIXME: add a horizontal scroll
@@ -165,23 +192,34 @@ impl Pane {
     }
 
     /// Moves (vertically) to the next entry in the specified [Direction] inside the [Pane].
-    pub fn move_within_pane(&mut self, direction: Direction, state: &AppState) -> anyhow::Result<Option<SideEffect>> {
+    pub fn move_within_pane(
+        &mut self,
+        direction: Direction,
+        state: &AppState,
+    ) -> anyhow::Result<Option<SideEffect>> {
         match self {
             Pane::ImageInfo(pane_state) => {
                 pane_state.toggle_active_field(direction);
                 Ok(None)
             }
-            Pane::LayerSelector(pane_state) => pane_state.move_within_pane(direction, state),
+            Pane::LayerSelector(pane_state) => {
+                pane_state.move_within_pane(direction, state)
+            }
             Pane::LayerInfo(pane_state) => {
                 pane_state.toggle_active_field(direction);
                 Ok(None)
             }
-            Pane::LayerInspector(pane_state) => pane_state.move_within_pane(direction, state).map(|_| None),
+            Pane::LayerInspector(pane_state) => {
+                pane_state.move_within_pane(direction, state).map(|_| None)
+            }
         }
     }
 
     /// Returns the currently selected value within a [Pane].
-    pub fn get_selected_field<'a>(&'a self, state: &'a AppState) -> Option<Cow<'a, str>> {
+    pub fn get_selected_field<'a>(
+        &'a self,
+        state: &'a AppState,
+    ) -> Option<Cow<'a, str>> {
         match self {
             Pane::ImageInfo(ImageInfoPane {
                 active_field,
@@ -198,25 +236,40 @@ impl Pane {
                 ImageInfoField::Os => os.into(),
             }),
             Pane::LayerInfo(LayerInfoPane { active_field }) => {
-                let Ok((selected_layer_digest, selected_layer, _)) = state.get_selected_layer() else {
+                let Ok((selected_layer_digest, selected_layer, _)) =
+                    state.get_selected_layer()
+                else {
                     // Add a log here for debugging purposes in case this happens somehow
-                    tracing::debug!("Failed to get the currently selected layer when getting the selected field from the LayerInfo pane");
+                    tracing::debug!(
+                        "Failed to get the currently selected layer when getting the selected field from the LayerInfo pane"
+                    );
                     return None;
                 };
 
                 Some(match active_field {
-                    LayerInfoField::Digest => encode_hex(selected_layer_digest).into(),
-                    LayerInfoField::Command => selected_layer.created_by.as_str().into(),
-                    LayerInfoField::Comment => selected_layer.comment.as_ref()?.into(),
+                    LayerInfoField::Digest => {
+                        encode_hex(selected_layer_digest).into()
+                    }
+                    LayerInfoField::Command => {
+                        selected_layer.created_by.as_str().into()
+                    }
+                    LayerInfoField::Comment => {
+                        selected_layer.comment.as_ref()?.into()
+                    }
                 })
             }
-            Pane::LayerInspector(pane) => match pane.get_current_node_full_path(state) {
-                Ok(path) => Some(path),
-                Err(e) => {
-                    tracing::debug!("Failed to get the path of the currently selected node: {}", e);
-                    None
+            Pane::LayerInspector(pane) => {
+                match pane.get_current_node_full_path(state) {
+                    Ok(path) => Some(path),
+                    Err(e) => {
+                        tracing::debug!(
+                            "Failed to get the path of the currently selected node: {}",
+                            e
+                        );
+                        None
+                    }
                 }
-            },
+            }
             _ => None,
         }
     }
@@ -224,7 +277,10 @@ impl Pane {
     /// Interacts with the currently active element inside the [Pane].
     ///
     /// The actual action depends on the currently active [Pane] and its state.
-    pub fn interact_within_pane(&mut self, state: &AppState) -> anyhow::Result<()> {
+    pub fn interact_within_pane(
+        &mut self,
+        state: &AppState,
+    ) -> anyhow::Result<()> {
         if let Pane::LayerInspector(pane_state) = self {
             // Only the inspector pane supports this action for now.
             pane_state
@@ -243,7 +299,8 @@ impl Pane {
         if let Pane::LayerInspector(pane_state) = self {
             let input_is_active = pane_state.toggle_filter_popup();
             // Apply the filter only when user exits the input screen to avoid using a lot of resources for nothing
-            let side_effect = (!input_is_active).then_some(SideEffect::FiltersUpdated);
+            let side_effect =
+                (!input_is_active).then_some(SideEffect::FiltersUpdated);
             return (input_is_active, side_effect);
         };
 
@@ -281,7 +338,11 @@ impl Pane {
     /// Scroll horizontally within the [Pane].
     ///
     /// Vertical scroll is done in [Self::move_within_pane].
-    pub fn scroll_within_pane(&mut self, direction: Direction, state: &AppState) -> anyhow::Result<()> {
+    pub fn scroll_within_pane(
+        &mut self,
+        direction: Direction,
+        state: &AppState,
+    ) -> anyhow::Result<()> {
         let pane_area = state
             .panes
             .get(Into::<usize>::into(Into::<ActivePane>::into(&*self)))
@@ -298,6 +359,19 @@ impl Pane {
         Ok(())
     }
 
+    /// Handles a subaction.
+    ///
+    /// How it's handled depends on the [Pane] itself.
+    pub fn on_subaction(&mut self) -> Option<SideEffect> {
+        // Only the inspector pane supports this action for now.
+        if let Pane::LayerInspector(pane_state) = self {
+            pane_state.toggle_show_only_changed_files();
+            return Some(SideEffect::FiltersUpdated);
+        };
+
+        None
+    }
+
     /// Returns a styled [Block] for the pane.
     fn get_styled_block(&self, is_active: bool) -> Block<'_> {
         let (border_type, border_style) = if is_active {
@@ -310,7 +384,9 @@ impl Pane {
             .border_type(border_type)
             .border_style(border_style)
             .title(self.get_styled_title(is_active))
-            .title(Line::from(Into::<ActivePane>::into(self).to_formatted_index()))
+            .title(Line::from(
+                Into::<ActivePane>::into(self).to_formatted_index(),
+            ))
     }
 
     /// Returns a styled [Title] for the pane.
@@ -333,7 +409,9 @@ impl Pane {
 }
 
 /// Initializes all panes from the provided [Image].
-pub fn init_panes(image: &mut Image) -> anyhow::Result<[(Option<Pane>, Rect); 4]> {
+pub fn init_panes(
+    image: &mut Image,
+) -> anyhow::Result<[(Option<Pane>, Rect); 4]> {
     let image_info_pane = Pane::ImageInfo(ImageInfoPane::new(
         std::mem::take(&mut image.image_name),
         std::mem::take(&mut image.tag),
@@ -342,13 +420,17 @@ pub fn init_panes(image: &mut Image) -> anyhow::Result<[(Option<Pane>, Rect); 4]
         std::mem::take(&mut image.os),
     ));
 
-    let (_, layer) = image.layers.get_index(0).context("got an image with 0 layers")?;
+    let (_, layer) = image
+        .layers
+        .get_index(0)
+        .context("got an image with 0 layers")?;
     let layer_selector_pane = Pane::LayerSelector(LayerSelectorPane::new(
         0,
         layer.changeset.clone().unwrap_or(LayerChangeSet::new(0)),
     ));
     let layer_info_pane = Pane::LayerInfo(LayerInfoPane::default());
-    let layer_inspector_pane = Pane::LayerInspector(LayerInspectorPane::default());
+    let layer_inspector_pane =
+        Pane::LayerInspector(LayerInspectorPane::default());
 
     // Note that we assign zeroed rects here. This means that we won't be able to render anything before dispatching at least one
     // [AppAction::Empty] event with the correct terminal size.
@@ -361,7 +443,9 @@ pub fn init_panes(image: &mut Image) -> anyhow::Result<[(Option<Pane>, Rect); 4]
 
     // Ensure that panes are always sorted by the render order, determined
     // by the order of enum's variants declaration.
-    panes.sort_by_key(|(a, _)| Into::<usize>::into(Into::<ActivePane>::into(a.as_ref().unwrap())));
+    panes.sort_by_key(|(a, _)| {
+        Into::<usize>::into(Into::<ActivePane>::into(a.as_ref().unwrap()))
+    });
 
     Ok(panes)
 }

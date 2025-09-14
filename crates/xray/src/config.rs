@@ -79,7 +79,8 @@ impl Config {
             })
             .context("failed to get the config directory")?;
 
-        std::fs::create_dir_all(&config_path).context("failed to create the config directory")?;
+        std::fs::create_dir_all(&config_path)
+            .context("failed to create the config directory")?;
 
         Ok(Config {
             config_path,

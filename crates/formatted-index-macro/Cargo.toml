@@ -2,7 +2,7 @@
 name = "formatted-index-macro"
 description = "A small macro that can generate 1-based string indexes for enum variants"
 version = "1.0.0"
-edition = "2021"
+edition = "2024"
 authors = ["h33333333"]
 license-file = "../../COPYING"
 readme = "../../README.md"

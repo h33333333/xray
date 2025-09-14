@@ -30,6 +30,10 @@ pub enum AppAction {
     InputPaste(String),
     /// Scroll horizontally in the specified [Direction] within the currently selected [super::view::Pane].
     Scroll(Direction),
+    /// Does a context-dependant subaction.
+    ///
+    /// The actual action depends on the currently active pane and its state.
+    Subaction,
 }
 
 /// Represents a direction in which the user wants to [AppAction::Move] or [AppAction::Scroll].

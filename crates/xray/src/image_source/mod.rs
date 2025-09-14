@@ -4,9 +4,9 @@ mod filesystem;
 use docker::DockerSource;
 use filesystem::FilesystemSource;
 
+use crate::Config;
 use crate::config::ImageSource;
 use crate::parser::Image;
-use crate::Config;
 
 /// A trait that represents entities that act as an OCI [Image] source.
 trait ImageSourcer {
@@ -41,7 +41,11 @@ pub fn resolve_image_from_config(config: &Config) -> anyhow::Result<Image> {
                     source.name(),
                     e
                 );
-                let error_with_context = e.chain().map(|e| format!("{e}")).collect::<Vec<_>>().join(": ");
+                let error_with_context = e
+                    .chain()
+                    .map(|e| format!("{e}"))
+                    .collect::<Vec<_>>()
+                    .join(": ");
                 errors.push((source.name(), error_with_context));
             }
         }

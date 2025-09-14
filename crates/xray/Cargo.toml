@@ -1,7 +1,7 @@
 [package]
 name = "xray-tui"
 version = "1.2.0"
-edition = "2021"
+edition = "2024"
 description = "A Docker (or any OCI-compliant) image layer inspector"
 authors = ["h33333333"]
 categories = ["command-line-utilities"]

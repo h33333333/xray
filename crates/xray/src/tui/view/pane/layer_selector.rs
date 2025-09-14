@@ -49,7 +49,10 @@ impl LayerSelectorPane {
 
     /// Returns a reference to the aggregated changeset and the number of entries inside it.
     pub fn aggregated_layers_changeset(&self) -> (&LayerChangeSet, usize) {
-        (&self.aggregated_layers_changeset.0, self.aggregated_layers_changeset.1)
+        (
+            &self.aggregated_layers_changeset.0,
+            self.aggregated_layers_changeset.1,
+        )
     }
 
     /// The main entrypoint for rendering this pane.
@@ -63,50 +66,73 @@ impl LayerSelectorPane {
         visible_cols: u16,
     ) -> Vec<Line<'l>> {
         // How many columns are left to display the command that created the layer
-        let cols_for_created_by = Into::<usize>::into(visible_cols) - LAYER_INFO_FIXED_LEN - LAYER_STATUS_INDICATOR_LEN;
+        let cols_for_created_by = Into::<usize>::into(visible_cols)
+            - LAYER_INFO_FIXED_LEN
+            - LAYER_STATUS_INDICATOR_LEN;
 
         layers
             .into_iter()
             .enumerate()
             // Always keep the selected layer visible
-            .skip((self.selected_layer_idx + 1).saturating_sub(Into::<usize>::into(visible_rows)))
+            .skip(
+                (self.selected_layer_idx + 1)
+                    .saturating_sub(Into::<usize>::into(visible_rows)),
+            )
             .map(|(idx, (_, layer))| {
                 let is_selected_layer = idx == self.selected_layer_idx;
-                let (layer_size, unit) = Unit::bytes_to_human_readable_units(layer.size);
-                let (created_by, is_scrollable_to_right) = if layer.created_by.len() > cols_for_created_by {
-                    let mut start = 0;
-                    let mut end = cols_for_created_by;
+                let (layer_size, unit) =
+                    Unit::bytes_to_human_readable_units(layer.size);
+                let (created_by, is_scrollable_to_right) =
+                    if layer.created_by.len() > cols_for_created_by {
+                        let mut start = 0;
+                        let mut end = cols_for_created_by;
 
-                    if is_selected_layer && self.scroll_offset + cols_for_created_by >= layer.created_by.len() {
-                        start = layer.created_by.len() - cols_for_created_by;
-                        end = layer.created_by.len();
-                    } else if is_selected_layer {
-                        start = self.scroll_offset;
-                        end = self.scroll_offset + cols_for_created_by;
-                    };
+                        if is_selected_layer
+                            && self.scroll_offset + cols_for_created_by
+                                >= layer.created_by.len()
+                        {
+                            start =
+                                layer.created_by.len() - cols_for_created_by;
+                            end = layer.created_by.len();
+                        } else if is_selected_layer {
+                            start = self.scroll_offset;
+                            end = self.scroll_offset + cols_for_created_by;
+                        };
 
-                    (&layer.created_by[start..end], end != layer.created_by.len())
-                } else {
-                    (layer.created_by.as_ref(), false)
-                };
-
-                let left_scrollable_indicator =
-                    if is_selected_layer && self.scroll_offset != 0 && layer.created_by.len() > cols_for_created_by {
-                        LEFT_SCROLLABLE_INDICATOR
+                        (
+                            &layer.created_by[start..end],
+                            end != layer.created_by.len(),
+                        )
                     } else {
-                        NOT_SCROLLABLE_INDICATOR
+                        (layer.created_by.as_ref(), false)
                     };
 
-                let right_scrollable_indicator = if is_selected_layer && is_scrollable_to_right {
-                    RIGHT_SCROLLABLE_INDICATOR
+                let left_scrollable_indicator = if is_selected_layer
+                    && self.scroll_offset != 0
+                    && layer.created_by.len() > cols_for_created_by
+                {
+                    LEFT_SCROLLABLE_INDICATOR
                 } else {
                     NOT_SCROLLABLE_INDICATOR
                 };
 
+                let right_scrollable_indicator =
+                    if is_selected_layer && is_scrollable_to_right {
+                        RIGHT_SCROLLABLE_INDICATOR
+                    } else {
+                        NOT_SCROLLABLE_INDICATOR
+                    };
+
                 Line::from(vec![
                     // A colored block that acts as an indicator of the currently selected layer.
                     // It's also used to display the layers that are currently used to show aggregated changes.
-                    Span::styled("  ", layer_status_indicator_style(idx, &self.selected_layer_idx)),
+                    Span::styled(
+                        "  ",
+                        layer_status_indicator_style(
+                            idx,
+                            &self.selected_layer_idx,
+                        ),
+                    ),
                     // Render per-layer information
                     Span::styled(
                         format!(
@@ -125,11 +151,17 @@ impl LayerSelectorPane {
     }
 
     /// Selects the next layer in the specified direction.
-    pub fn move_within_pane(&mut self, direction: Direction, state: &AppState) -> anyhow::Result<Option<SideEffect>> {
+    pub fn move_within_pane(
+        &mut self,
+        direction: Direction,
+        state: &AppState,
+    ) -> anyhow::Result<Option<SideEffect>> {
         let current_layer_idx = self.selected_layer_idx;
 
-        if current_layer_idx == state.layers.len() - 1 && matches!(direction, Direction::Forward)
-            || current_layer_idx == 0 && matches!(direction, Direction::Backward)
+        if current_layer_idx == state.layers.len() - 1
+            && matches!(direction, Direction::Forward)
+            || current_layer_idx == 0
+                && matches!(direction, Direction::Backward)
         {
             // Don't allow cycling through the layers endlessly
             return Ok(None);
@@ -137,13 +169,16 @@ impl LayerSelectorPane {
 
         let next_layer_idx = match direction {
             Direction::Forward => (current_layer_idx + 1) % state.layers.len(),
-            Direction::Backward => (current_layer_idx + state.layers.len() - 1) % state.layers.len(),
+            Direction::Backward => {
+                (current_layer_idx + state.layers.len() - 1)
+                    % state.layers.len()
+            }
         };
 
-        let all_current_layers = state
-            .layers
-            .get_range(..next_layer_idx + 1)
-            .context("bug: the next layer idx points to an invalid index")?;
+        let all_current_layers =
+            state.layers.get_range(..next_layer_idx + 1).context(
+                "bug: the next layer idx points to an invalid index",
+            )?;
 
         // Get the first changeset and use it as a base layer for merging the rest of the layers
         let mut aggregated_layers = all_current_layers
@@ -152,7 +187,9 @@ impl LayerSelectorPane {
             .context("bug: not a single layer is selected")?;
 
         // Merge the rest of the layers with the first one
-        for (_, layer) in all_current_layers.get_range(1..).into_iter().flatten() {
+        for (_, layer) in
+            all_current_layers.get_range(1..).into_iter().flatten()
+        {
             if let Some(changeset) = layer.changeset.as_ref() {
                 aggregated_layers = aggregated_layers.merge(changeset.clone())
             }
@@ -161,7 +198,8 @@ impl LayerSelectorPane {
         // Calculate the total number of entries in the new changeset
         let aggregated_layers_changeset_size = aggregated_layers.iter().count();
         self.selected_layer_idx = next_layer_idx;
-        self.aggregated_layers_changeset = (aggregated_layers, aggregated_layers_changeset_size);
+        self.aggregated_layers_changeset =
+            (aggregated_layers, aggregated_layers_changeset_size);
         // Reset the scroll offset as well
         self.scroll_offset = 0;
 
@@ -171,7 +209,12 @@ impl LayerSelectorPane {
     /// Scrolls the currently selected pane entry horizontally in the specified direction.
     ///
     /// Requires providing the pane area to correctly cap the scroll.
-    pub fn scroll(&mut self, direction: Direction, pane_area: (u16, u16), state: &AppState) -> anyhow::Result<()> {
+    pub fn scroll(
+        &mut self,
+        direction: Direction,
+        pane_area: (u16, u16),
+        state: &AppState,
+    ) -> anyhow::Result<()> {
         // How many columns are left to display the command that created the layer
         let cols_for_created_by = Into::<usize>::into(pane_area.0) - LAYER_INFO_FIXED_LEN - LAYER_STATUS_INDICATOR_LEN - 2 /* borders */;
 

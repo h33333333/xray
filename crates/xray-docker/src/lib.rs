@@ -35,7 +35,10 @@ pub enum DockerError {
 }
 
 impl DockerError {
-    fn from_var_error_with_var_name(source: std::env::VarError, var_name: Cow<'static, str>) -> DockerError {
+    fn from_var_error_with_var_name(
+        source: std::env::VarError,
+        var_name: Cow<'static, str>,
+    ) -> DockerError {
         DockerError::EnvLookupError { var_name, source }
     }
 
