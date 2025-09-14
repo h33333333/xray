@@ -104,10 +104,10 @@ pub(crate) fn copy_to_clipboard(
     clipboard: Option<&mut Clipboard>,
     data: std::borrow::Cow<'_, str>,
 ) {
-    if let Some(clipboard) = clipboard {
-        if let Err(e) = clipboard.set_text(data) {
-            tracing::debug!("Failed to copy text to the clipboard: {}", e);
-        };
+    if let Some(clipboard) = clipboard
+        && let Err(e) = clipboard.set_text(data)
+    {
+        tracing::debug!("Failed to copy text to the clipboard: {}", e);
     }
 }
 

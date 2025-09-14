@@ -107,21 +107,20 @@ impl InnerNode {
         if let InnerNode::Directory(state) = self {
             state.children.retain(|path, child| {
                 // Size-based filtering
-                if let Some(node_size_filter) = filter.node_size_filter {
-                    if child.inner.size() < node_size_filter {
-                        return false;
-                    }
+                if let Some(node_size_filter) = filter.node_size_filter
+                    && child.inner.size() < node_size_filter
+                {
+                    return false;
                 }
 
                 // Node state filtering
-                if let Some(layer_idx) = filter.show_nodes_changed_in_layer {
-                    if node_last_updated_in != layer_idx
-                        || child.updated_in != layer_idx
-                    {
-                        // Omit all files that weren't changed in the specified layer
-                        // if the corresponding filter is present
-                        return false;
-                    }
+                if let Some(layer_idx) = filter.show_nodes_changed_in_layer
+                    && (node_last_updated_in != layer_idx
+                        || child.updated_in != layer_idx)
+                {
+                    // Omit all files that weren't changed in the specified layer
+                    // if the corresponding filter is present
+                    return false;
                 }
 
                 let is_dir_with_children = child
