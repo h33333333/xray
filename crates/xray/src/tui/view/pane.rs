@@ -20,7 +20,7 @@ use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::block::Title;
 use ratatui::widgets::{Block, BorderType, Paragraph, Widget, Wrap};
-use style::{text_color, ACTIVE_FIELD_STYLE, ACTIVE_INSPECTOR_NODE_STYLE};
+use style::{ACTIVE_FIELD_STYLE, ACTIVE_INSPECTOR_NODE_STYLE, text_color};
 pub(super) use style::{
     ADDED_INSPECTOR_NODE_STYLE, DELETED_INSPECTOR_NODE_STYLE, FIELD_KEY_STYLE,
     FIELD_VALUE_STYLE, MODIFIED_INSPECTOR_NODE_STYLE,
@@ -240,7 +240,9 @@ impl Pane {
                     state.get_selected_layer()
                 else {
                     // Add a log here for debugging purposes in case this happens somehow
-                    tracing::debug!("Failed to get the currently selected layer when getting the selected field from the LayerInfo pane");
+                    tracing::debug!(
+                        "Failed to get the currently selected layer when getting the selected field from the LayerInfo pane"
+                    );
                     return None;
                 };
 
@@ -260,7 +262,10 @@ impl Pane {
                 match pane.get_current_node_full_path(state) {
                     Ok(path) => Some(path),
                     Err(e) => {
-                        tracing::debug!("Failed to get the path of the currently selected node: {}", e);
+                        tracing::debug!(
+                            "Failed to get the path of the currently selected node: {}",
+                            e
+                        );
                         None
                     }
                 }

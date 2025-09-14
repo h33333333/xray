@@ -3,11 +3,11 @@ use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, BorderType, Paragraph, Widget, Wrap};
 
+use super::ActivePane;
 use super::pane::{
     ADDED_INSPECTOR_NODE_STYLE, DELETED_INSPECTOR_NODE_STYLE, FIELD_KEY_STYLE,
     FIELD_VALUE_STYLE, MODIFIED_INSPECTOR_NODE_STYLE,
 };
-use super::ActivePane;
 use crate::tui::store::AppState;
 
 const COLOR_GUIDE: &[(Color, &str)] = &[

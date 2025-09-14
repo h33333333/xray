@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput};
+use syn::{Data, DeriveInput, parse_macro_input};
 
 #[proc_macro_derive(FormattedIndex)]
 pub fn formatted_index_derive(input: TokenStream) -> TokenStream {

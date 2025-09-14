@@ -256,7 +256,9 @@ impl Parser {
                     };
                 }
                 BlobType::Unknown => {
-                    tracing::debug!("Unknown blob type was encountered while parsing the image")
+                    tracing::debug!(
+                        "Unknown blob type was encountered while parsing the image"
+                    )
                 }
             }
         }

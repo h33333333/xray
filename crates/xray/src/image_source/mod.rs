@@ -4,9 +4,9 @@ mod filesystem;
 use docker::DockerSource;
 use filesystem::FilesystemSource;
 
+use crate::Config;
 use crate::config::ImageSource;
 use crate::parser::Image;
-use crate::Config;
 
 /// A trait that represents entities that act as an OCI [Image] source.
 trait ImageSourcer {

@@ -5,7 +5,7 @@ use ratatui::layout::Rect;
 
 use super::action::AppAction;
 use super::util::copy_to_clipboard;
-use super::view::{init_panes, ActivePane, Pane, SideEffect};
+use super::view::{ActivePane, Pane, SideEffect, init_panes};
 use crate::parser::{Image, Layer, LayerChangeSet, Sha256Digest};
 use crate::tui::util::split_layout;
 
@@ -68,7 +68,9 @@ impl AppState {
         {
             pane.selected_layer_idx()
         } else {
-            anyhow::bail!("layer selector pane is no longer at the expected position in the UI");
+            anyhow::bail!(
+                "layer selector pane is no longer at the expected position in the UI"
+            );
         };
         let (digest, layer) = self
             .layers
@@ -86,7 +88,9 @@ impl AppState {
         if let Some(Pane::LayerSelector(pane)) = layer_selector_pane {
             Ok(pane.aggregated_layers_changeset())
         } else {
-            anyhow::bail!("layer selector pane is no longer at the expected position in the UI");
+            anyhow::bail!(
+                "layer selector pane is no longer at the expected position in the UI"
+            );
         }
     }
 
@@ -133,7 +137,9 @@ impl AppState {
             // Filter the new changeset if filters are present
             pane.filter_current_changeset(changeset, current_layer_idx as u8);
         } else {
-            anyhow::bail!("layer inspector pane is no longer at the expected position in the UI");
+            anyhow::bail!(
+                "layer inspector pane is no longer at the expected position in the UI"
+            );
         }
 
         // Return the pane back

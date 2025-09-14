@@ -2,7 +2,7 @@ use std::path::Path;
 
 use anyhow::Context;
 use xray_tui::{
-    init_logging, resolve_image_from_config, AppDispatcher, Config,
+    AppDispatcher, Config, init_logging, resolve_image_from_config,
 };
 
 fn main() -> anyhow::Result<()> {
