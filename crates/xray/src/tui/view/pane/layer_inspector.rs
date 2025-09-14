@@ -75,7 +75,7 @@ impl LayerInspectorPane {
             for (node_idx, n_of_children) in self
                 .collapsed_nodes
                 .iter()
-                .take_while(|(&node_idx, _)| node_idx < idx)
+                .take_while(|&(&node_idx, _)| node_idx < idx)
             {
                 if node_idx + n_of_children >= idx {
                     // Some parent of this node is collapsed, don't render it
@@ -256,7 +256,7 @@ impl LayerInspectorPane {
                 let mut iter = self
                     .collapsed_nodes
                     .iter()
-                    .take_while(|(&idx, _)| idx < next_node_idx);
+                    .take_while(|&(&idx, _)| idx < next_node_idx);
                 let mut next_item = iter.next();
                 while let Some((node_idx, n_of_children)) = next_item {
                     // Check if the calculated next node is a child of the node we got on the current iteration
@@ -272,7 +272,7 @@ impl LayerInspectorPane {
                     // Find the next collapsed node that is either not a child of the node we got on the current iteration OR
                     // contains the calculated next node
                     next_item =
-                        iter.find(|(&next_idx, &next_n_of_children)| {
+                        iter.find(|&(&next_idx, &next_n_of_children)| {
                             next_idx > node_idx + n_of_children
                                 || next_idx + next_n_of_children
                                     >= next_node_idx
@@ -425,7 +425,7 @@ impl LayerInspectorPane {
         let mut iter = self
             .collapsed_nodes
             .iter()
-            .take_while(|(&idx, _)| idx < self.current_node_idx);
+            .take_while(|&(&idx, _)| idx < self.current_node_idx);
         let mut next_item = iter.next();
         while let Some((idx, n_of_children)) = next_item {
             // We are interested in collapsed nodes that are within our adjusted skip range
@@ -438,7 +438,7 @@ impl LayerInspectorPane {
             adjusted_skip_count += n_of_children;
             // Find the next node that is not a child of the current one
             next_item =
-                iter.find(|(&next_idx, _)| next_idx > idx + n_of_children);
+                iter.find(|&(&next_idx, _)| next_idx > idx + n_of_children);
         }
 
         adjusted_skip_count
