@@ -7,7 +7,7 @@ use super::{Node, NodeFilters, RestorablePath};
 use crate::parser::{DirMap, DirectoryState, FileState, NodeStatus};
 
 /// Represents the actual state of a file tree [nodes](super::Node).
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum InnerNode {
     /// A file or a link.
     File(FileState),
@@ -93,7 +93,11 @@ impl InnerNode {
     /// Filters this [InnerNode] using the provided filter.
     ///
     /// Returns `true` if there are one or more nodes remaining after the filtering.
-    pub(super) fn filter(&mut self, filter: NodeFilters) -> bool {
+    pub(super) fn filter(
+        &mut self,
+        node_last_updated_in: u8,
+        filter: NodeFilters,
+    ) -> bool {
         if !filter.any() {
             // No filters -> entry is always included
             return true;
@@ -109,109 +113,151 @@ impl InnerNode {
                     }
                 }
 
+                // Node state filtering
+                if let Some(layer_idx) = filter.show_nodes_changed_in_layer {
+                    if node_last_updated_in != layer_idx
+                        || child.updated_in != layer_idx
+                    {
+                        // Omit all files that weren't changed in the specified layer
+                        // if the corresponding filter is present
+                        return false;
+                    }
+                }
+
                 let is_dir_with_children = child
                     .inner
                     .children()
                     .map(|children| !children.is_empty())
                     .unwrap_or(false);
 
+                let mut include_if_no_children_remained = true;
+
                 // Path-based filtering
-                let path_filter_for_child =
-                    if let Some(path_filter) = filter.path_filter.as_ref() {
-                        let is_filtered_out = if let Some(leftmost_part) =
-                            path_filter.get_current_component()
-                        {
-                            path != Path::new(".")
-                                && !path
-                                    .as_os_str()
-                                    .to_str()
-                                    // We need to convert both paths to a str to check for a partial match using `contains`
-                                    .and_then(|path| {
-                                        leftmost_part.to_str().map(
-                                            |leftmost_part| {
-                                                path.contains(leftmost_part)
-                                            },
-                                        )
-                                    })
-                                    // If anything fails here, exclude the node
-                                    .unwrap_or(true)
-                        } else {
-                            // If there is no longer a filter, then we simply retain the node
+                let path_filter_for_child = if let Some(path_filter) =
+                    filter.path_filter.as_ref()
+                {
+                    let is_filtered_out = if let Some(leftmost_part) =
+                        path_filter.get_current_component()
+                    {
+                        path != Path::new(".")
+                            && !path
+                                .as_os_str()
+                                .to_str()
+                                // We need to convert both paths to a str to check for a partial match using `contains`
+                                .and_then(|path| {
+                                    leftmost_part.to_str().map(
+                                        |leftmost_part| {
+                                            path.contains(leftmost_part)
+                                        },
+                                    )
+                                })
+                                // If anything fails here, exclude the node
+                                .unwrap_or(true)
+                    } else {
+                        if !filter.any_non_path_filter() {
+                            // If there is no longer a filter and we don't have any other
+                            // filters, then we simply retain the node
                             return true;
-                        };
+                        }
+                        false
+                    };
 
-                        // Directories are filtered out based on their children when using relative path, so we don't filter them out here
-                        if is_filtered_out
-                            && (!path_filter.is_using_relative_path()
-                                || !is_dir_with_children)
-                        {
-                            // Exclude filtered out nodes (files, empty dirs, and mismatched dirs when using an absolute path)
+                    // Directories are filtered out based on their children when using relative path, so we don't filter them out here
+                    if is_filtered_out
+                        && (!path_filter.is_using_relative_path()
+                            || !is_dir_with_children)
+                    {
+                        // Exclude filtered out nodes (files, empty dirs, and mismatched dirs when using an absolute path)
+                        return false;
+                    }
+
+                    if is_filtered_out && path_filter.is_using_relative_path() {
+                        // We try to find matching children nodes for this directory, but will
+                        // exclude it if none match
+                        include_if_no_children_remained = false;
+                    }
+
+                    let possibly_empty_filter = if path != Path::new(".") {
+                        if is_filtered_out {
+                            // This is only reachable when using relative paths, the current node is a dir, and it didn't pass the check.
+                            // In this case, we reset the path filter back to its original state and check children of the current node.
+                            path_filter.restore()
+                        } else {
+                            // In all other cases, we advance the current path filter component by 1
+                            path_filter.advance()
+                        }
+                    } else {
+                        // Pass the filter as is
+                        path_filter.clone()
+                    };
+
+                    // Don't pass an empty filter if we've already used all of its components,
+                    // use [Option::None] instead.
+                    let path_filter = (!possibly_empty_filter
+                        .get_current_component()
+                        .map(|component| component.as_os_str().is_empty())
+                        .unwrap_or(true))
+                    .then_some(possibly_empty_filter);
+
+                    if path_filter.is_none()
+                        && !is_filtered_out
+                        && !filter.any_non_path_filter()
+                    {
+                        // This is only reachable if the current node matched the last component in the path filter and the global filter doesn't contain any non-path filtering.
+                        // In this case, we simply inclue the node and don't do any further child filtering (as their parent passed the check).
+                        return true;
+                    }
+
+                    path_filter
+                } else {
+                    None
+                };
+
+                // Regex-based filtering
+                let path_regex_for_child =
+                    if let Some(regex) = filter.path_regex.as_deref() {
+                        let Some(path) = path.to_str() else {
+                            // Exclude this node otherwise
                             return false;
-                        }
-
-                        let possibly_empty_filter = if path != Path::new(".") {
-                            if is_filtered_out {
-                                // This is only reachable when using relative paths, the current node is a dir, and it didn't pass the check.
-                                // In this case, we reset the path filter back to its original state and check children of the current node.
-                                path_filter.restore()
-                            } else {
-                                // In all other cases, we advance the current path filter component by 1
-                                path_filter.advance()
-                            }
-                        } else {
-                            // Pass the filter as is
-                            path_filter.clone()
                         };
 
-                        // Don't pass an empty filter if we've already used all of its components,
-                        // use [Option::None] instead.
-                        let filter = (!possibly_empty_filter
-                            .get_current_component()
-                            .map(|component| component.as_os_str().is_empty())
-                            .unwrap_or(true))
-                        .then_some(possibly_empty_filter);
-
-                        if filter.is_none() && !is_filtered_out {
-                            // This is only reachable if the current node matched the last component in the filter.
-                            // In this case, we simply inclue the node and don't do any further child filtering (as their parent passed the check).
-                            return true;
+                        if regex.is_match(path) {
+                            if !filter.any_non_path_filter() {
+                                // Include both directories and files if they satisfy the RegEx and the
+                                // filter doesn't contain any non-path filters.
+                                // We don't check children of directories in this case.
+                                return true;
+                            }
+                            // Don't filter children if parent matched directly
+                            None
+                        } else {
+                            // If it's a dir with children, then we also check the children.
+                            // Otherwise (if it's a file or an empty dir), we exclude the node immediately.
+                            if !is_dir_with_children {
+                                return false;
+                            }
+                            include_if_no_children_remained = false;
+                            filter.path_regex.as_deref().map(Cow::Borrowed)
                         }
-
-                        filter
                     } else {
                         None
                     };
-
-                // Regex-based filtering
-                if let Some(regex) = filter.path_regex.as_deref() {
-                    let Some(path) = path.to_str() else {
-                        // Exclude this node otherwise
-                        return false;
-                    };
-
-                    if regex.is_match(path) {
-                        // Include both directories and files if they satisfy the RegEx.
-                        // We don't check children of directories in this case.
-                        return true;
-                    } else {
-                        // If it's a dir with children, then we also check the children.
-                        // Otherwise (if it's a file or an empty dir), we exclude the node immediately.
-                        if !is_dir_with_children {
-                            return false;
-                        }
-                    }
-                }
 
                 // Filter the children
                 child.filter(NodeFilters {
                     path_filter: path_filter_for_child,
                     node_size_filter: filter.node_size_filter,
-                    path_regex: filter.path_regex.as_deref().map(Cow::Borrowed),
+                    path_regex: path_regex_for_child,
+                    show_nodes_changed_in_layer: filter
+                        .show_nodes_changed_in_layer,
+                    include_dir_if_no_children_remained:
+                        include_if_no_children_remained,
                 })
             });
 
-            // Return `true` if one or more children are present after filtering
-            return !state.children.is_empty();
+            // Return `true` if the directory should be included even without any children or if one or more of its children are present after filtering
+            return filter.include_dir_if_no_children_remained
+                || !state.children.is_empty();
         }
 
         // Include the node if we didn't trigger any other branches

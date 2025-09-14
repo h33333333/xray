@@ -129,8 +129,9 @@ impl AppState {
             pane.reset();
 
             let (changeset, _) = self.get_aggregated_layers_changeset()?;
+            let (_, _, current_layer_idx) = self.get_selected_layer()?;
             // Filter the new changeset if filters are present
-            pane.filter_current_changeset(changeset);
+            pane.filter_current_changeset(changeset, current_layer_idx as u8);
         } else {
             anyhow::bail!("layer inspector pane is no longer at the expected position in the UI");
         }
@@ -189,7 +190,8 @@ impl Store for AppState {
             }
             action @ (AppAction::Interact
             | AppAction::Move(..)
-            | AppAction::Scroll(..))
+            | AppAction::Scroll(..)
+            | AppAction::Subaction)
                 if !self.show_help_popup =>
             {
                 let active_pane_idx = Into::<usize>::into(self.active_pane);
@@ -201,6 +203,7 @@ impl Store for AppState {
                             "bug: forgot to return the {active_pane_idx} pane?"
                         )
                     })?;
+
                 let side_effect: Option<SideEffect> = match action {
                     AppAction::Interact => {
                         active_pane.interact_within_pane(self).context(
@@ -219,8 +222,11 @@ impl Store for AppState {
                             )?;
                         None
                     }
+                    AppAction::Subaction => active_pane.on_subaction(),
+
                     _ => unreachable!("Checked above"),
                 };
+
                 // Return the pane back
                 let (active_pane_opt, _) = &mut self.panes[active_pane_idx];
                 active_pane_opt.replace(active_pane);

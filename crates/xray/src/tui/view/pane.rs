@@ -354,6 +354,19 @@ impl Pane {
         Ok(())
     }
 
+    /// Handles a subaction.
+    ///
+    /// How it's handled depends on the [Pane] itself.
+    pub fn on_subaction(&mut self) -> Option<SideEffect> {
+        // Only the inspector pane supports this action for now.
+        if let Pane::LayerInspector(pane_state) = self {
+            pane_state.toggle_show_only_changed_files();
+            return Some(SideEffect::FiltersUpdated);
+        };
+
+        None
+    }
+
     /// Returns a styled [Block] for the pane.
     fn get_styled_block(&self, is_active: bool) -> Block<'_> {
         let (border_type, border_style) = if is_active {

@@ -104,7 +104,7 @@ fn render(frame: &mut Frame, state: &AppState) -> anyhow::Result<()> {
     if state.show_help_popup {
         let popup_area = popup_area(
             frame.area(),
-            Some(Constraint::Length(22)),
+            Some(Constraint::Length(23)),
             Some(Constraint::Length(75)),
         );
         clear_area(frame, popup_area);

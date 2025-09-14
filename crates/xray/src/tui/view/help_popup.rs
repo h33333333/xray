@@ -77,12 +77,13 @@ fn get_hotkeys_for_active_pane(
 ) {
     match active_pane {
         ActivePane::ImageInfo | ActivePane::LayerInfo => {
-            hotkeys.push(("y", "copy the selected value to the clipboard"))
+            hotkeys.push(("y", "copy the selected value to the clipboard"));
         }
         ActivePane::LayerInspector => {
             hotkeys.push(("enter, space", "toggle the selected directory"));
             hotkeys.push(("ctrl-f", "show the filter popup"));
-            hotkeys.push(("y", "copy path to the clipboard"))
+            hotkeys.push(("y", "copy path to the clipboard"));
+            hotkeys.push(("c", "show only changed files"));
         }
         ActivePane::LayerSelector => {
             hotkeys.push(("left, h", "scroll left"));

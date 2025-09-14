@@ -167,16 +167,20 @@ impl LayerInspectorPane {
         self.collapsed_nodes.clear();
     }
 
-    /// Updates [Self::filtered_changeset] by applying the active user-provided filters to the contained changeset.
-    pub fn filter_current_changeset(&mut self, changeset: &LayerChangeSet) {
-        if !self.filter_popup.filters().any() {
+    /// Updates [Self::filtered_changeset] by applying the active user-provided filters to the provided changeset.
+    pub fn filter_current_changeset(
+        &mut self,
+        changeset: &LayerChangeSet,
+        current_layer_idx: u8,
+    ) {
+        if !self.filter_popup.filters(current_layer_idx).any() {
             // If there are no filters, simply reset the filtered changeset and do nothing else
             self.filtered_changeset = None;
             return;
         };
 
         let mut filtered_changeset = changeset.clone();
-        filtered_changeset.filter(self.filter_popup.filters());
+        filtered_changeset.filter(self.filter_popup.filters(current_layer_idx));
         let n_of_nodes = filtered_changeset.iter().count();
 
         self.filtered_changeset = Some((filtered_changeset, n_of_nodes));
@@ -348,6 +352,11 @@ impl LayerInspectorPane {
     /// Pops from the currently active filter in the filter popup.
     pub fn pop_from_filter(&mut self) {
         self.filter_popup.pop_from_filter();
+    }
+
+    /// Toggles the [FilterPopup::show_only_changed_files] filter.
+    pub fn toggle_show_only_changed_files(&mut self) {
+        self.filter_popup.toggle_show_only_changed_files();
     }
 
     /// Returns a filter popup if it should be shown on the screen.

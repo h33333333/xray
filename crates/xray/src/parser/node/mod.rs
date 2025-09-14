@@ -57,7 +57,7 @@ impl Node {
     /// Returns true if there are any nodes left in the tree after filtering.
     pub fn filter(&mut self, mut filter: NodeFilters) -> bool {
         filter.strip_path_filter_prefix();
-        self.inner.filter(filter)
+        self.inner.filter(self.updated_in, filter)
     }
 
     /// Creates a new [iterator](TreeIter).

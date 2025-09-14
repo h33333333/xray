@@ -35,6 +35,8 @@ pub struct FilterPopup {
     pub node_size_filter: u64,
     /// Units used for the node size filter
     pub size_filter_units: Unit,
+    /// Show only files that were changed in the current layer
+    pub show_only_changed_files: bool,
 }
 
 impl FilterPopup {
@@ -99,14 +101,30 @@ impl FilterPopup {
         }
     }
 
+    /// Toggles the [Self::show_only_changed_files] filter.
+    pub fn toggle_show_only_changed_files(&mut self) {
+        self.show_only_changed_files = !self.show_only_changed_files;
+    }
+
     /// Returns a [NodeFilters] instance created using this popup's data.
-    pub fn filters(&self) -> NodeFilters<'_, '_> {
-        let mut filter = NodeFilters::default()
-            .with_size_filter(self.size_filter_in_units());
+    pub fn filters(&self, current_layer_index: u8) -> NodeFilters<'_, '_> {
+        let mut filter = NodeFilters::default();
+
+        if self.size_filter_in_units() != 0 {
+            filter = filter.with_size_filter(self.size_filter_in_units());
+        }
+
+        if self.show_only_changed_files {
+            filter =
+                filter.with_show_files_changed_in_layer(current_layer_index);
+        }
 
         match self.path_filter_kind {
             PathFilterKind::Regular => {
-                filter = filter.with_path_filter(Path::new(&self.path_filter))
+                if !self.path_filter.is_empty() {
+                    filter =
+                        filter.with_path_filter(Path::new(&self.path_filter))
+                }
             }
             PathFilterKind::Regex => {
                 if let Some(regex) = self.path_regex() {

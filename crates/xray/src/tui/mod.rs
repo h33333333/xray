@@ -173,6 +173,9 @@ impl AppDispatcher {
                 Event::Key(event) if event.code == KeyCode::Char('y') => {
                     self.dispatch(AppAction::Copy)?;
                 }
+                Event::Key(event) if event.code == KeyCode::Char('c') => {
+                    self.dispatch(AppAction::Subaction)?;
+                }
                 // Toggle help
                 Event::Key(event) if event.code == KeyCode::Char('/') => {
                     self.dispatch(AppAction::ToggleHelpPane)?;
