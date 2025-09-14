@@ -119,6 +119,7 @@ xray <IMAGE>[:tag]
 | `Ctrl-f`         | open the filter popup (**inside the "Layer Changes" pane**)                   |
 | `y`              | copy the currently selected value to the clipboard (**if supported by pane**) |
 | `/`              | open/close the help popup                                                     |
+| `c`              | toggle "show only changed files" filter (**inside the "Layer Changes" pane**) |
 
 ## Limitations
 
