@@ -20,10 +20,9 @@ use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::block::Title;
 use ratatui::widgets::{Block, BorderType, Paragraph, Widget, Wrap};
-use style::{ACTIVE_FIELD_STYLE, ACTIVE_INSPECTOR_NODE_STYLE, text_color};
+use style::{ACTIVE_FIELD_STYLE, text_color};
 pub(super) use style::{
-    ADDED_INSPECTOR_NODE_STYLE, DELETED_INSPECTOR_NODE_STYLE, FIELD_KEY_STYLE,
-    FIELD_VALUE_STYLE, MODIFIED_INSPECTOR_NODE_STYLE,
+    FIELD_KEY_STYLE, FIELD_VALUE_STYLE, LayerInspectorNodeStyles,
 };
 use util::fields_into_lines;
 
@@ -145,24 +144,21 @@ impl Pane {
                 let lines = pane_state
                     .changeset_to_lines(
                         layer_changeset,
-                        |node_is_active,
+                        |node_is_selected,
                          node_updated_in,
                          node_is_deleted,
                          node_is_modified| {
-                            if !pane_is_active {
-                                return field_value_style;
-                            }
-                            if node_is_active {
-                                ACTIVE_INSPECTOR_NODE_STYLE
+                            if pane_is_active && node_is_selected {
+                                LayerInspectorNodeStyles::get_selected_node_style()
                             } else if node_updated_in == current_layer_idx as u8
                                 && current_layer_idx != 0
                             {
                                 if node_is_deleted {
-                                    DELETED_INSPECTOR_NODE_STYLE
+                                    LayerInspectorNodeStyles::get_deleted_node_style(pane_is_active)
                                 } else if node_is_modified {
-                                    MODIFIED_INSPECTOR_NODE_STYLE
+                                    LayerInspectorNodeStyles::get_modified_node_style(pane_is_active)
                                 } else {
-                                    ADDED_INSPECTOR_NODE_STYLE
+                                    LayerInspectorNodeStyles::get_added_node_style(pane_is_active)
                                 }
                             } else {
                                 field_value_style

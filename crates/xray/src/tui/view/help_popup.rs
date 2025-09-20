@@ -5,22 +5,42 @@ use ratatui::widgets::{Block, BorderType, Paragraph, Widget, Wrap};
 
 use super::ActivePane;
 use super::pane::{
-    ADDED_INSPECTOR_NODE_STYLE, DELETED_INSPECTOR_NODE_STYLE, FIELD_KEY_STYLE,
-    FIELD_VALUE_STYLE, MODIFIED_INSPECTOR_NODE_STYLE,
+    FIELD_KEY_STYLE, FIELD_VALUE_STYLE, LayerInspectorNodeStyles,
 };
 use crate::tui::store::AppState;
 
-const COLOR_GUIDE: &[(Color, &str)] = &[
+const COLOR_GUIDE: &[(&[Color], &str)] = &[
     (
-        ADDED_INSPECTOR_NODE_STYLE.fg.expect("should be present"),
+        &[
+            LayerInspectorNodeStyles::get_added_node_style(true)
+                .fg
+                .expect("should be present"),
+            LayerInspectorNodeStyles::get_added_node_style(false)
+                .fg
+                .expect("should be present"),
+        ],
         "Added in the current layer",
     ),
     (
-        MODIFIED_INSPECTOR_NODE_STYLE.fg.expect("should be present"),
+        &[
+            LayerInspectorNodeStyles::get_modified_node_style(true)
+                .fg
+                .expect("should be present"),
+            LayerInspectorNodeStyles::get_modified_node_style(false)
+                .fg
+                .expect("should be present"),
+        ],
         "Modified in the current layer",
     ),
     (
-        DELETED_INSPECTOR_NODE_STYLE.fg.expect("should be present"),
+        &[
+            LayerInspectorNodeStyles::get_deleted_node_style(true)
+                .fg
+                .expect("should be present"),
+            LayerInspectorNodeStyles::get_deleted_node_style(false)
+                .fg
+                .expect("should be present"),
+        ],
         "Deleted in the current layer",
     ),
 ];
@@ -132,12 +152,19 @@ fn format_color_guide_section() -> impl Iterator<Item = Line<'static>> {
     )
     .into_iter()
     .chain(chainable_blank_line())
-    .chain(COLOR_GUIDE.iter().map(|(color, description)| {
-        Line::from(vec![
-            Span::styled("   ", Style::new().bg(*color)),
-            Span::styled("  ", FIELD_VALUE_STYLE),
-            Span::styled(*description, FIELD_VALUE_STYLE),
-        ])
+    .chain(COLOR_GUIDE.iter().map(|&(colors, description)| {
+        let mut colors = colors
+            .iter()
+            .map(|&color| Span::styled("   ", Style::new().bg(color)))
+            .intersperse(Span::styled(" or ", FIELD_VALUE_STYLE))
+            .collect::<Vec<_>>();
+
+        // Separator between colors and their meaning
+        colors.push(Span::styled("  ", FIELD_VALUE_STYLE));
+        // Actual description
+        colors.push(Span::styled(description, FIELD_VALUE_STYLE));
+
+        Line::from(colors)
     }))
 }
 
