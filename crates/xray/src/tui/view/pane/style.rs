@@ -12,18 +12,58 @@ pub const ACTIVE_FIELD_STYLE: Style =
 /// A delimiter between the field's name and value.
 pub const FIELD_VALUE_DELIMITER: &str = ": ";
 
-/// A standard node that wasn't affected by changes in the currently selected layer.
-pub const ACTIVE_INSPECTOR_NODE_STYLE: Style =
-    Style::new().fg(Color::Black).bg(Color::White);
-/// A style for a node that was added in the current layer.
-pub const ADDED_INSPECTOR_NODE_STYLE: Style =
-    Style::new().fg(Color::LightGreen);
-/// A style for a node that was modified in the current layer.
-pub const MODIFIED_INSPECTOR_NODE_STYLE: Style =
-    Style::new().fg(Color::LightYellow);
-/// A style for a node that was deleted in the current layer.
-pub const DELETED_INSPECTOR_NODE_STYLE: Style =
-    Style::new().fg(Color::LightRed);
+pub struct LayerInspectorNodeStyles;
+
+impl LayerInspectorNodeStyles {
+    /// A style for a node that is currently selected.
+    const SELECTED_NODE_STYLE: Style =
+        Style::new().fg(Color::Black).bg(Color::White);
+
+    /// A style for a node that was added in the current layer and is inside the active pane.
+    const ACTIVE_PANE_ADDED_NODE_STYLE: Style =
+        Style::new().fg(Color::Indexed(106));
+    /// A style for a node that was modified in the current layer and is inside the active pane.
+    const ACTIVE_PANE_MODIFIED_NODE_STYLE: Style =
+        Style::new().fg(Color::Indexed(220));
+    /// A style for a node that was deleted in the current layer and is inside the active pane.
+    const ACTIVE_PANE_DELETED_NODE_STYLE: Style =
+        Style::new().fg(Color::Indexed(160));
+
+    /// A style for a node that was added in the current layer and is inside the inactive pane.
+    const INACTIVE_PANE_ADDED_NODE_STYLE: Style =
+        Style::new().fg(Color::Indexed(108));
+    /// A style for a node that was modified in the current layer and is inside the inactive pane.
+    const INACTIVE_PANE_MODIFIED_NODE_STYLE: Style =
+        Style::new().fg(Color::Indexed(222));
+    /// A style for a node that was deleted in the current layer and is inside the inactive pane.
+    const INACTIVE_PANE_DELETED_NODE_STYLE: Style =
+        Style::new().fg(Color::Indexed(124));
+
+    pub const fn get_selected_node_style() -> Style {
+        Self::SELECTED_NODE_STYLE
+    }
+
+    pub const fn get_added_node_style(pane_is_active: bool) -> Style {
+        if pane_is_active {
+            return Self::ACTIVE_PANE_ADDED_NODE_STYLE;
+        }
+        Self::INACTIVE_PANE_ADDED_NODE_STYLE
+    }
+
+    pub const fn get_modified_node_style(pane_is_active: bool) -> Style {
+        if pane_is_active {
+            return Self::ACTIVE_PANE_MODIFIED_NODE_STYLE;
+        }
+        Self::INACTIVE_PANE_MODIFIED_NODE_STYLE
+    }
+
+    pub const fn get_deleted_node_style(pane_is_active: bool) -> Style {
+        if pane_is_active {
+            return Self::ACTIVE_PANE_DELETED_NODE_STYLE;
+        }
+        Self::INACTIVE_PANE_DELETED_NODE_STYLE
+    }
+}
 
 /// Returns the text [Color] based on whether the [Pane](super::Pane) is active.
 pub fn text_color(pane_is_active: bool) -> Color {
