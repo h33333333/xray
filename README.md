@@ -41,6 +41,12 @@ $ rustup toolchain install nightly
 $ cargo +nightly install --locked xray-tui
 ```
 
+### From the [AUR](https://aur.archlinux.org/packages/xray-oci-git)
+
+```bash
+paru -Sy xray-oci-git
+```
+
 ## Motivation
 
 Everyone who had to work with container images before knows about the [dive](https://github.com/wagoodman/dive) tool. It's a great tool, but it doesn't work that well for bigger images, especially the ones that are 5 GB or more in size.
