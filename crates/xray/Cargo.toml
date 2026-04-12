@@ -2,7 +2,7 @@
 name = "xray-tui"
 version = "1.3.1"
 edition = "2024"
-description = "A Docker (or any OCI-compliant) image layer inspector"
+description = "A layer inspector for OCI-compliant images"
 authors = ["h33333333"]
 categories = ["command-line-utilities"]
 keywords = ["terminal", "tui", "docker", "image", "container"]

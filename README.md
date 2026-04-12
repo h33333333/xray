@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <i>A blazing fast Docker (or any OCI-compliant) image layer inspector!</i>
+  <i>A blazing fast layer inspector for OCI-compliant images!</i>
 </p>
 
 > Xray helps developers understand and optimize container images by visualizing layers and their contents using a minimalistic but powerful UI with performance in mind.
@@ -16,14 +16,14 @@
 
 ![Demo](./resources/demo.gif)
 
-- 🛠️ Supports **Vim motions**
-- 📌 Relatively **small memory footprint** (~80Mb for an 8Gb image)
-- 🗒️ Supports **path filtering** (with full *RegEx* support)
-- ⛓️ Supports **size-based filtering**
-- 🚀 Fast startup times due to optimized image parsing
-- 🏡 Convenient and minimalistic UI
-- 📦 Works with **any OCI-compliant container image**
-- ⚙️ No needless re-rendering of the UI: `xray` values your CPU cycles
+- 🛠️ Supports **Vim motions** and has **fully customizable keybindings**.
+- 📌 Relatively **small memory footprint** (~80Mb for an 8Gb image).
+- 🗒️ Supports **path filtering** (with full *RegEx* support).
+- ⛓️ Supports **size-based filtering**.
+- 🚀 Fast startup times due to optimized image parsing.
+- 🏡 Convenient and minimalistic UI.
+- 📦 Works with **any OCI-compliant container image**.
+- ⚙️ No needless re-rendering of the UI: `xray` values your CPU cycles.
 
 ## Disclaimer
 
@@ -75,6 +75,9 @@ Options:
   -f, --fs
           Force image resolution using a tarred image
 
+      --podman
+          Force image resolution using Podman
+
   -h, --help
           Print help (see a summary with '-h')
 
@@ -92,8 +95,9 @@ xray <IMAGE>[:tag]
 
 `xray` will try to resolve the provided image using the default resolution order:
 
-1. Look for a [tarred repository](https://docs.docker.com/reference/cli/docker/image/save/) with image locally (treating the provided argument as a **path**)
-2. Try to resolve the image using Docker
+1. Look for a [tarred repository](https://docs.docker.com/reference/cli/docker/image/save/) with image locally (treating the provided argument as a **path**).
+2. Try to resolve the image using Docker.
+3. Try to resolve the image using Podman.
 
 > 💡 Please refer to `xray --help` if you want to force a specific image resolver.
 
@@ -101,11 +105,11 @@ xray <IMAGE>[:tag]
 
 > 💡 You can always use the *help popup* available by pressing `/` to get the *contextualized help* for the currently active pane.
 
-#### Navigation
+#### Default bindings for navigation
 
 | Key Sequence | Action                                                    |
 | ------------ | --------------------------------------------------------- |
-| `1`          | select  the "Image Information" pane                      |
+| `1`          | select the "Image Information" pane                      |
 | `2`          | select the "Layer Information" pane                       |
 | `3`          | select the "Layers" pane                                  |
 | `4`          | select the "Layer Changes" pane                           |
@@ -117,7 +121,7 @@ xray <IMAGE>[:tag]
 | `Shift-Tab`  | cycle through the panes: previous pane                    |
 | `q`          | exit the app                                              |
 
-#### Actions
+#### Default bindings for actions
 
 | Key Sequence     | Action                                                                        |
 | ---------------- | ----------------------------------------------------------------------------- |
@@ -126,6 +130,25 @@ xray <IMAGE>[:tag]
 | `y`              | copy the currently selected value to the clipboard (**if supported by pane**) |
 | `/`              | open/close the help popup                                                     |
 | `c`              | toggle "show only changed files" filter (**inside the "Layer Changes" pane**) |
+
+#### Custom keybindings
+
+All keybindings mentioned above are **fully customizable**.
+
+When run for the first time, `xray` creates a file named `$CONFIG_DIR/keybindings.toml`, which contains all default keybindings and their description.
+
+> 💡Default `$CONFIG_DIR` is `$HOME/.xray`.
+
+You can then update the default keybindings to your liking -- `xray` will start using your new bindings automatically after a restart!
+
+For example, if you want to open the filter popup on `ALT+p`, then you can change `toggle_filter_popup` to look like:
+
+```toml
+# Toggle the filtering popup.
+toggle_filter_popup = ["Alt+p"]
+```
+
+> Please refer to [crossterm-keybind](https://github.com/yanganto/crossterm-keybind) documentation if you are unsure how to map a specific key sequence.
 
 ## Limitations
 
@@ -140,7 +163,6 @@ xray <IMAGE>[:tag]
 - Add unit and fuzz tests
 - Improve the scrolling behaviour in the "Layer Changes" tab
 - Add more installation options
-- Add configurable keybindings
 - Add layer caching
 
 ## Copyright and License

@@ -7,13 +7,13 @@ use dirs::home_dir;
 #[derive(clap::Args)]
 #[group(required = false, multiple = false)]
 struct ClapImageSource {
-    /// Force image resolution using Docker
+    /// Force image resolution using Docker.
     #[arg(short = 'd', long = "docker")]
     force_docker: bool,
-    /// Force image resolution using a tarred image
+    /// Force image resolution using a tarred image.
     #[arg(short = 'f', long = "fs")]
     force_fs: bool,
-    /// Force image resolution using Docker
+    /// Force image resolution using Podman.
     #[arg(long = "podman")]
     force_podman: bool,
 }
