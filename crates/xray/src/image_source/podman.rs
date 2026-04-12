@@ -35,7 +35,9 @@ impl ImageSourcer for PodmanSource {
         );
 
         let reader = Cursor::new(raw_image);
-        let parser = Parser::default();
+        // Podman images don't usually contain Docker-like manifests, so we simply deduce the image name from
+        // the input arg.
+        let parser = Parser::new_with_image(image);
         parser
             .parse_image(reader)
             .context("failed to parse the image")

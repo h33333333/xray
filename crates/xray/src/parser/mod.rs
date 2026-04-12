@@ -139,6 +139,17 @@ impl Parser {
         Parser::default()
     }
 
+    pub fn new_with_image(image: impl Into<String>) -> Self {
+        let mut image = image.into();
+        if !image.contains(':') {
+            image.push_str(":latest");
+        }
+        Parser {
+            tagged_name: Some(image),
+            ..Default::default()
+        }
+    }
+
     /// Parses an OCI-compliant container image from the provided image Tar blob.
     pub fn parse_image<R: Read + Seek>(
         mut self,
