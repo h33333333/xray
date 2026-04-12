@@ -1,6 +1,8 @@
+use crossterm_keybind::KeyBindTrait;
 use ratatui::style::Stylize;
 use ratatui::widgets::{Paragraph, Widget};
 
+use crate::keybindings::KeyAction;
 use crate::tui::store::AppState;
 
 /// A command bar that shows the most important hotkeys for the current [supper::Pane].
@@ -15,8 +17,11 @@ impl CommandBar {
             "open"
         };
 
-        Ok(Paragraph::new(format!("/ - {action} help"))
-            .centered()
-            .gray())
+        Ok(Paragraph::new(format!(
+            "{} - {action} help",
+            KeyAction::ToggleHelp.key_bindings_display()
+        ))
+        .centered()
+        .gray())
     }
 }
