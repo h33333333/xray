@@ -1,11 +1,13 @@
 mod docker;
 mod filesystem;
+mod podman;
 
 use docker::DockerSource;
 use filesystem::FilesystemSource;
 
 use crate::Config;
 use crate::config::ImageSource;
+use crate::image_source::podman::PodmanSource;
 use crate::parser::Image;
 
 /// A trait that represents entities that act as an OCI [Image] source.
@@ -21,9 +23,12 @@ trait ImageSourcer {
 
 pub fn resolve_image_from_config(config: &Config) -> anyhow::Result<Image> {
     let image_sources: Vec<&dyn ImageSourcer> = match config.image_source() {
-        ImageSource::Default => vec![&FilesystemSource, &DockerSource],
+        ImageSource::Default => {
+            vec![&FilesystemSource, &DockerSource, &PodmanSource]
+        }
         ImageSource::ForceDocker => vec![&DockerSource],
         ImageSource::ForceFS => vec![&FilesystemSource],
+        ImageSource::ForcePodman => vec![&PodmanSource],
     };
 
     if image_sources.is_empty() {

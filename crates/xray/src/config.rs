@@ -13,6 +13,9 @@ struct ClapImageSource {
     /// Force image resolution using a tarred image
     #[arg(short = 'f', long = "fs")]
     force_fs: bool,
+    /// Force image resolution using Docker
+    #[arg(long = "podman")]
+    force_podman: bool,
 }
 
 impl ClapImageSource {
@@ -21,6 +24,8 @@ impl ClapImageSource {
             ImageSource::ForceDocker
         } else if self.force_fs {
             ImageSource::ForceFS
+        } else if self.force_podman {
+            ImageSource::ForcePodman
         } else {
             ImageSource::Default
         }
@@ -47,12 +52,14 @@ struct Arg {
 /// Used to configure the provided image's source.
 #[derive(Debug, Clone, Copy)]
 pub enum ImageSource {
-    /// Try to read the image from FS, try Docker if FS resolution failed
+    /// Try to read to read the image from FS, then Docker, then Podman.
     Default,
-    /// Try Docker, don't try reading the image from FS
+    /// Try Docker, don't try reading the image from anywhere else.
     ForceDocker,
-    /// Try to read the image from FS, don't try Docker
+    /// Try to read the image from FS, don't try reading the image from anywhere else.
     ForceFS,
+    /// Try Podman, don't try reading the image from anywhere else.
+    ForcePodman,
 }
 
 #[derive(Debug)]
