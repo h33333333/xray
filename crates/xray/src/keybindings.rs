@@ -13,7 +13,8 @@ pub enum KeyAction {
     /// Format reference: https://github.com/yanganto/crossterm-keybind.
 
     /// Exit the application.
-    #[keybindings["Control+c", "Q"]]
+    // NOTE: crossterm reports Shift+q as "Shift+Q" on MacOS.
+    #[keybindings["Control+c", "Q", "Shift+Q"]]
     Exit,
     /// Close active window (i.e. the help popup).
     ///
