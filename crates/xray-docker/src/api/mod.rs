@@ -32,7 +32,7 @@ impl DockerApi {
         })
     }
 
-    /// Checks the provided image exists locally.
+    /// Checks whether the provided image exists locally.
     pub fn image_is_present(&mut self, image: &str) -> Result<bool> {
         let request = http::Request::builder()
             .uri(format!("/images/{image}/json"))
