@@ -1,6 +1,6 @@
 [package]
 name = "xray-tui"
-version = "1.3.1"
+version = "1.4.0"
 edition = "2024"
 description = "A layer inspector for OCI-compliant images"
 authors = ["h33333333"]
