@@ -64,7 +64,7 @@ impl HelpPopup {
         let mut hotkeys = get_common_hotkeys();
         get_hotkeys_for_active_pane(&mut hotkeys, state.active_pane);
         // Make sure that the keys are sorted in the descending hotkey length order
-        hotkeys.sort_by(|(hk_a, _), (hk_b, _)| hk_b.len().cmp(&hk_a.len()));
+        hotkeys.sort_by_key(|(hk, _)| std::cmp::Reverse(hk.len()));
 
         let lines = format_color_guide_section()
             // Add a separator between the color guide and hotkeys
