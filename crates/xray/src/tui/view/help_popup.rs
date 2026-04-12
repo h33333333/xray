@@ -1,4 +1,7 @@
+use std::borrow::Cow;
+
 use anyhow::Context as _;
+use crossterm_keybind::KeyBindTrait as _;
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, BorderType, Paragraph, Widget, Wrap};
@@ -7,6 +10,7 @@ use super::ActivePane;
 use super::pane::{
     FIELD_KEY_STYLE, FIELD_VALUE_STYLE, LayerInspectorNodeStyles,
 };
+use crate::keybindings::KeyAction;
 use crate::tui::store::AppState;
 
 const COLOR_GUIDE: &[(&[Color], &str)] = &[
@@ -56,7 +60,7 @@ impl HelpPopup {
             .padding(ratatui::widgets::Padding {
                 left: 5,
                 right: 0,
-                top: 2,
+                top: 1,
                 bottom: 0,
             })
             .title(Line::from("  Help  ").centered());
@@ -79,42 +83,82 @@ impl HelpPopup {
 }
 
 /// Returns hotkeys that are common to all panes.
-fn get_common_hotkeys() -> Vec<(&'static str, &'static str)> {
+fn get_common_hotkeys() -> Vec<(Cow<'static, str>, &'static str)> {
     vec![
-        ("down, j", "move cursor down"),
-        ("up, k", "move cursor up"),
-        ("s-tab", "select previous pane"),
-        ("tab", "select next pane"),
-        ("q", "exit the app"),
-        ("1, 2, 3, 4", "select the corresponding pane"),
+        (
+            KeyAction::Down.key_bindings_display().into(),
+            "move cursor down",
+        ),
+        (
+            KeyAction::Up.key_bindings_display().into(),
+            "move cursor up",
+        ),
+        (
+            KeyAction::PreviousItem.key_bindings_display().into(),
+            "select previous pane",
+        ),
+        (
+            KeyAction::NextItem.key_bindings_display().into(),
+            "select next pane",
+        ),
+        (
+            KeyAction::CloseActiveWindow.key_bindings_display().into(),
+            "close the active window",
+        ),
+        (
+            KeyAction::Exit.key_bindings_display().into(),
+            "exit the app",
+        ),
+        ("1, 2, 3, 4".into(), "select the corresponding pane"),
     ]
 }
 
 /// Returns contextualized hotkeys that are relevant to the provided [ActivePane].
 fn get_hotkeys_for_active_pane(
-    hotkeys: &mut Vec<(&'static str, &'static str)>,
+    hotkeys: &mut Vec<(Cow<'static, str>, &'static str)>,
     active_pane: ActivePane,
 ) {
     match active_pane {
         ActivePane::ImageInfo | ActivePane::LayerInfo => {
-            hotkeys.push(("y", "copy the selected value to the clipboard"));
+            hotkeys.push((
+                KeyAction::Copy.key_bindings_display().into(),
+                "copy the selected value to the clipboard",
+            ));
         }
         ActivePane::LayerInspector => {
-            hotkeys.push(("enter, space", "toggle the selected directory"));
-            hotkeys.push(("ctrl-f", "show the filter popup"));
-            hotkeys.push(("y", "copy path to the clipboard"));
-            hotkeys.push(("c", "show only changed files"));
+            hotkeys.push((
+                KeyAction::Interact.key_bindings_display().into(),
+                "toggle the selected directory",
+            ));
+            hotkeys.push((
+                KeyAction::ToggleFilterPopup.key_bindings_display().into(),
+                "show the filter popup",
+            ));
+            hotkeys.push((
+                KeyAction::Copy.key_bindings_display().into(),
+                "copy path to the clipboard",
+            ));
+            hotkeys.push((
+                KeyAction::Subaction.key_bindings_display().into(),
+                "show only changed files",
+            ));
         }
         ActivePane::LayerSelector => {
-            hotkeys.push(("left, h", "scroll left"));
-            hotkeys.push(("right, l", "scroll right"));
+            hotkeys.push((
+                KeyAction::Backward.key_bindings_display().into(),
+                "scroll left",
+            ));
+            hotkeys.push((
+                KeyAction::Forward.key_bindings_display().into(),
+                "scroll right",
+            ));
         }
     }
 }
 
 /// Formats the "hotkeys" section in the help popup.
 fn format_hotkeys_section(
-    hotkeys: Vec<(&'static str, &'static str)>,
+    hotkeys: Vec<(Cow<'static, str>, &'static str)>,
 ) -> anyhow::Result<impl Iterator<Item = Line<'static>>> {
     // We need this to pad shorter hotkeys and make the list look less ugly
     let longest_hotkey = hotkeys

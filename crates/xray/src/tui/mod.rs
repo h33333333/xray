@@ -4,6 +4,7 @@ use crossterm::event::{
     self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
 };
 use crossterm::terminal::size;
+use crossterm_keybind::KeyBindTrait as _;
 use dispatcher::Dispatcher;
 use store::AppState;
 use view::App;
@@ -11,6 +12,7 @@ use view::App;
 mod action;
 pub use action::AppAction;
 
+use crate::keybindings::KeyAction;
 use crate::parser::Image;
 mod dispatcher;
 mod store;
@@ -34,9 +36,8 @@ impl AppDispatcher {
         // Do the initial render of the interface
         self.dispatch(AppAction::Empty(size))?;
 
-        loop {
+        'outer: loop {
             let event = event::read()?;
-            let store = self.get_store();
 
             // Ignore all key events on Windows besides presses to prevent duplicate events
             if cfg!(windows)
@@ -52,156 +53,144 @@ impl AppDispatcher {
             }
 
             match event {
-                // Re-render the interface when terminal window is resized
+                // Re-render the interface when terminal window is resized.
                 Event::Resize(h, v) => {
                     self.dispatch(AppAction::Empty((h, v)))?
                 }
-                // Quit
-                Event::Key(event)
-                    if (event.code == KeyCode::Char('q')
-                        && !store.is_in_insert_mode)
-                        || (event.code == KeyCode::Char('c')
-                            && event
-                                .modifiers
-                                .intersects(KeyModifiers::CONTROL)) =>
-                {
-                    if store.show_help_popup && event.code == KeyCode::Char('q')
-                    {
-                        // Allow the users to close the help popup on `q` and don't exit the app in this case.
-                        self.dispatch(AppAction::ToggleHelpPane)?;
-                        continue;
+                // Keyboard-related events.
+                Event::Key(event) => {
+                    // Handle exit keybind before everything else.
+                    if KeyAction::Exit.match_any(&event) {
+                        break Ok(());
                     }
 
-                    break Ok(());
-                }
-                // If we are in the insert mode, we allow the free text input and handle only a small subset of hotkeys (like `CTRL-L` or `Enter`)
-                Event::Key(event) if store.is_in_insert_mode => {
-                    if event.code == KeyCode::Enter
-                        || event.code == KeyCode::Esc
-                        || (event.code == KeyCode::Char('f')
-                            && event
-                                .modifiers
-                                .intersects(KeyModifiers::CONTROL))
-                    {
-                        self.dispatch(AppAction::ToggleInputMode)?;
-                        continue;
-                    }
-
-                    if event.code == KeyCode::Backspace
-                        || event.code == KeyCode::Delete
-                    {
-                        self.dispatch(AppAction::InputDeleteCharacter)?;
-                        continue;
-                    }
-
-                    if event.code == KeyCode::Char('l')
-                        && event.modifiers.intersects(KeyModifiers::CONTROL)
-                    {
-                        self.dispatch(AppAction::Interact)?;
-                        continue;
-                    }
-
-                    if event.code == KeyCode::Tab
-                        || event.code == KeyCode::BackTab
-                    {
-                        let direction = if event.code == KeyCode::Tab {
-                            Direction::Forward
-                        } else {
-                            Direction::Backward
-                        };
-                        self.dispatch(AppAction::Move(direction))?;
-                        continue;
-                    }
-
-                    if let KeyCode::Char(input) = event.code {
-                        let input = if event
-                            .modifiers
-                            .intersects(KeyModifiers::SHIFT)
+                    // This block handles insert mode, as it requires handling free text input.
+                    if self.get_store().is_in_insert_mode {
+                        // Close the popup.
+                        if event.code == KeyCode::Enter
+                            || event.code == KeyCode::Esc
+                            || KeyAction::ToggleFilterPopup.match_any(&event)
                         {
-                            input.to_ascii_uppercase()
-                        } else {
-                            input
-                        };
-                        self.dispatch(AppAction::InputCharacter(input))?;
-                    }
-                }
-                // Select next pane
-                Event::Key(event) if event.code == KeyCode::Tab => {
-                    self.dispatch(AppAction::TogglePane(Direction::Forward))?;
-                }
-                // Select previous pane
-                Event::Key(event) if event.code == KeyCode::BackTab => {
-                    self.dispatch(AppAction::TogglePane(Direction::Backward))?;
-                }
-                // Scroll left
-                Event::Key(event)
-                    if event.code == KeyCode::Char('h')
-                        || event.code == KeyCode::Left =>
-                {
-                    self.dispatch(AppAction::Scroll(Direction::Backward))?;
-                }
-                // Move down
-                Event::Key(event)
-                    if event.code == KeyCode::Char('j')
-                        || event.code == KeyCode::Down =>
-                {
-                    self.dispatch(AppAction::Move(Direction::Forward))?;
-                }
-                // Move up
-                Event::Key(event)
-                    if event.code == KeyCode::Char('k')
-                        || event.code == KeyCode::Up =>
-                {
-                    self.dispatch(AppAction::Move(Direction::Backward))?;
-                }
-                // Scroll right
-                Event::Key(event)
-                    if event.code == KeyCode::Char('l')
-                        || event.code == KeyCode::Right =>
-                {
-                    self.dispatch(AppAction::Scroll(Direction::Forward))?;
-                }
-                // Interact within the current pane.
-                Event::Key(event)
-                    if event.code == KeyCode::Enter
-                        || event.code == KeyCode::Char(' ') =>
-                {
-                    self.dispatch(AppAction::Interact)?;
-                }
+                            self.dispatch(AppAction::ToggleInputMode)?;
+                            continue;
+                        }
 
-                // Copy the selected item to clipboard
-                Event::Key(event) if event.code == KeyCode::Char('y') => {
-                    self.dispatch(AppAction::Copy)?;
-                }
-                Event::Key(event) if event.code == KeyCode::Char('c') => {
-                    self.dispatch(AppAction::Subaction)?;
-                }
-                // Toggle help
-                Event::Key(event) if event.code == KeyCode::Char('/') => {
-                    self.dispatch(AppAction::ToggleHelpPane)?;
-                }
-                // Select a pane by its index
-                Event::Key(KeyEvent {
-                    code: KeyCode::Char(code @ ('1' | '2' | '3' | '4')),
-                    ..
-                }) => {
-                    let index = code
+                        // Delete a character.
+                        if event.code == KeyCode::Backspace
+                            || event.code == KeyCode::Delete
+                        {
+                            self.dispatch(AppAction::InputDeleteCharacter)?;
+                            continue;
+                        }
+
+                        if KeyAction::FilterSubaction.match_any(&event) {
+                            self.dispatch(AppAction::Interact)?;
+                            continue;
+                        }
+
+                        if KeyAction::NextItem.match_any(&event) {
+                            self.dispatch(AppAction::Move(Direction::Forward))?;
+                            continue;
+                        }
+                        if KeyAction::PreviousItem.match_any(&event) {
+                            self.dispatch(AppAction::Move(
+                                Direction::Backward,
+                            ))?;
+                            continue;
+                        }
+
+                        let KeyCode::Char(mut input) = event.code else {
+                            continue;
+                        };
+
+                        if event.modifiers.intersects(KeyModifiers::SHIFT) {
+                            input = input.to_ascii_uppercase()
+                        }
+                        self.dispatch(AppAction::InputCharacter(input))?;
+                        continue;
+                    }
+
+                    // This match handles unconfigurable keybinds.
+                    match event {
+                        // Select a pane by its index
+                        KeyEvent {
+                            code: KeyCode::Char(code @ ('1' | '2' | '3' | '4')),
+                            ..
+                        } => {
+                            let index = code
                         .to_digit(10)
                         .context("conversion to digit shouldn't fail, as we are sure about the contents")?
                         as usize;
-                    // Convert to a 0-based index
-                    self.dispatch(AppAction::SelectPane(index - 1))?;
+                            // Convert to a 0-based index.
+                            self.dispatch(AppAction::SelectPane(index - 1))?;
+                            continue;
+                        }
+                        _ => (),
+                    };
+
+                    // This handles all configurable keybinds.
+                    for action in KeyAction::dispatch(&event) {
+                        match action {
+                            // Close help pane if it's active.
+                            KeyAction::CloseActiveWindow
+                                if self.get_store().show_help_popup =>
+                            {
+                                self.dispatch(AppAction::ToggleHelpPane)?;
+                            }
+                            KeyAction::CloseActiveWindow => {
+                                break 'outer Ok(());
+                            }
+                            KeyAction::ToggleHelp => {
+                                self.dispatch(AppAction::ToggleHelpPane)?;
+                            }
+                            KeyAction::ToggleFilterPopup => {
+                                self.dispatch(AppAction::ToggleInputMode)?;
+                            }
+                            KeyAction::PreviousItem => {
+                                self.dispatch(AppAction::TogglePane(
+                                    Direction::Backward,
+                                ))?;
+                            }
+                            KeyAction::NextItem => {
+                                self.dispatch(AppAction::TogglePane(
+                                    Direction::Forward,
+                                ))?;
+                            }
+                            KeyAction::Interact => {
+                                self.dispatch(AppAction::Interact)?;
+                            }
+                            KeyAction::Copy => {
+                                self.dispatch(AppAction::Copy)?;
+                            }
+                            KeyAction::Subaction => {
+                                self.dispatch(AppAction::Subaction)?;
+                            }
+                            KeyAction::Backward => {
+                                self.dispatch(AppAction::Scroll(
+                                    Direction::Backward,
+                                ))?;
+                            }
+                            KeyAction::Down => {
+                                self.dispatch(AppAction::Move(
+                                    Direction::Forward,
+                                ))?;
+                            }
+                            KeyAction::Up => {
+                                self.dispatch(AppAction::Move(
+                                    Direction::Backward,
+                                ))?;
+                            }
+                            KeyAction::Forward => {
+                                self.dispatch(AppAction::Scroll(
+                                    Direction::Forward,
+                                ))?;
+                            }
+                            // Everything else was handled before already.
+                            _ => (),
+                        }
+                    }
                 }
-                // Toggle path filter input
-                Event::Key(event)
-                    if event.code == KeyCode::Char('f')
-                        && event
-                            .modifiers
-                            .intersects(KeyModifiers::CONTROL) =>
-                {
-                    self.dispatch(AppAction::ToggleInputMode)?;
-                }
-                // Ignore everything else
+                // Ignore everything else.
                 evt => tracing::trace!("Ignoring an event: {:?}", evt),
             }
         }

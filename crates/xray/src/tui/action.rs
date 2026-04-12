@@ -26,8 +26,6 @@ pub enum AppAction {
     InputCharacter(char),
     /// User wants to delete a character while in the "insert" mode.
     InputDeleteCharacter,
-    /// User pasted a string while in the "insert" mode.
-    InputPaste(String),
     /// Scroll horizontally in the specified [Direction] within the currently selected [super::view::Pane].
     Scroll(Direction),
     /// Does a context-dependant subaction.

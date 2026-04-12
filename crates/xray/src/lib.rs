@@ -11,3 +11,5 @@ mod tui;
 pub use tui::AppDispatcher;
 mod image_source;
 pub use image_source::resolve_image_from_config;
+mod keybindings;
+pub use keybindings::init_keybindings;
