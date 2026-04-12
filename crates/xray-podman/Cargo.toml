@@ -1,0 +1,14 @@
+[package]
+name = "xray-podman"
+description = "A collection of Podman-specific utilities, required for xray-tui to work"
+authors = ["h33333333"]
+license-file = "../../COPYING"
+readme = "../../README.md"
+repository = "https://github.com/h33333333/xray"
+documentation = "https://github.com/h33333333/xray"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+thiserror = "2.0.12"
+anyhow = "1.0.95"
