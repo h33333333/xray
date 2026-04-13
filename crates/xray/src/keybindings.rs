@@ -29,8 +29,8 @@ pub enum KeyAction {
     ToggleFilterPopup,
     /// Do a subaction for the currently active filter in the filtering popup. This is currently used for:
     ///
-    ///     1. Toggling between path and RegEx-based filtering.
-    ///     2. Changing size units.
+    /// 1. Toggling between path and RegEx-based filtering.
+    /// 2. Changing size units.
     #[keybindings["Control+l"]]
     FilterSubaction,
 
@@ -38,20 +38,20 @@ pub enum KeyAction {
 
     /// Select previous item. This action is currently used for:
     ///
-    ///     1. Cycling through panes.
-    ///     2. Cycling through available filter types.
+    /// 1. Cycling through panes.
+    /// 2. Cycling through available filter types.
     // FIXME: Shift+BackTab was required to make it work on MacOS.
     #[keybindings["BackTab", "Shift+BackTab"]]
     PreviousItem,
     /// Select next item. This action is currently used for:
     ///
-    ///     1. Cycling through panes.
-    ///     2. Cycling through available filter types.
+    /// 1. Cycling through panes.
+    /// 2. Cycling through available filter types.
     #[keybindings["Tab"]]
     NextItem,
     /// Do an action within the currently active pane. This action is currently used for:
     ///
-    ///     1. Toggling the currently selected node in the Layer Inspector pane.
+    /// 1. Toggling the currently selected node in the Layer Inspector pane.
     #[keybindings["Enter", " "]]
     Interact,
     /// Copies the currently selected item to the system clipboard if the clipboard is available
@@ -60,7 +60,7 @@ pub enum KeyAction {
     Copy,
     /// Do the additional action within the currently active context. This action is currently used for:
     ///
-    ///     1. Toggling the "show only changed files" filter within the Layer Inspector pane.
+    /// 1. Toggling the "show only changed files" filter within the Layer Inspector pane.
     #[keybindings["c"]]
     Subaction,
 
