@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use clap::Parser;
-use dirs::home_dir;
+use dirs::{config_dir, state_dir};
 
 #[derive(clap::Args)]
 #[group(required = false, multiple = false)]
@@ -37,7 +37,7 @@ impl ClapImageSource {
 struct Arg {
     /// Override the config directory location.
     ///
-    /// Default: $HOME/.xray
+    /// Default: $XDG_CONFIG_HOME/xray or $HOME/.config/xray
     #[arg(short = 'p', long)]
     config_path: Option<PathBuf>,
     // TODO: implement layer caching
@@ -65,6 +65,7 @@ pub enum ImageSource {
 #[derive(Debug)]
 pub struct Config {
     config_path: PathBuf,
+    state_path: PathBuf,
     image: String,
     image_source: ImageSource,
 }
@@ -79,18 +80,20 @@ impl Config {
         let image_source = image_source.into_enum();
 
         let config_path = config_path
-            .or_else(|| {
-                let mut home = home_dir()?;
-                home.push(".xray");
-                Some(home)
-            })
+            .or_else(default_config_path)
             .context("failed to get the config directory")?;
+        let state_path = default_state_path()
+            .or_else(|| Some(config_path.clone()))
+            .context("failed to get the state directory")?;
 
         std::fs::create_dir_all(&config_path)
             .context("failed to create the config directory")?;
+        std::fs::create_dir_all(&state_path)
+            .context("failed to create the state directory")?;
 
         Ok(Config {
             config_path,
+            state_path,
             image,
             image_source,
         })
@@ -106,6 +109,10 @@ impl Config {
         &self.config_path
     }
 
+    pub fn state_path(&self) -> &Path {
+        &self.state_path
+    }
+
     pub fn image(&self) -> &str {
         &self.image
     }
@@ -113,4 +120,18 @@ impl Config {
     pub fn image_source(&self) -> ImageSource {
         self.image_source
     }
+}
+
+fn default_config_path() -> Option<PathBuf> {
+    config_dir().map(|mut path| {
+        path.push("xray");
+        path
+    })
+}
+
+fn default_state_path() -> Option<PathBuf> {
+    state_dir().map(|mut path| {
+        path.push("xray");
+        path
+    })
 }

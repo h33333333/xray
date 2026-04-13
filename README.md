@@ -67,7 +67,7 @@ Options:
   -p, --config-path <CONFIG_PATH>
           Override the config directory location.
 
-          Default: $HOME/.xray
+          Default: $XDG_CONFIG_HOME/xray or $HOME/.config/xray
 
   -d, --docker
           Force image resolution using Docker
@@ -135,9 +135,11 @@ xray <IMAGE>[:tag]
 
 All keybindings mentioned above are **fully customizable**.
 
-When run for the first time, `xray` creates a file named `$CONFIG_DIR/keybindings.toml`, which contains all default keybindings and their description.
+When run for the first time, `xray` creates a file named `$CONFIG_DIR/keybinds.toml`, which contains all default keybindings and their description.
 
-> 💡Default `$CONFIG_DIR` is `$HOME/.xray`.
+> 💡Default `$CONFIG_DIR` is `$XDG_CONFIG_HOME/xray` or `$HOME/.config/xray`.
+
+Runtime state such as `xray.log` is stored in `$XDG_STATE_HOME/xray` or `$HOME/.local/state/xray`.
 
 You can then update the default keybindings to your liking -- `xray` will start using your new bindings automatically after a restart!
 

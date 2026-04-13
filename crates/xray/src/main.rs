@@ -9,7 +9,7 @@ use xray_tui::{
 fn main() -> anyhow::Result<()> {
     let config = Config::new()?;
 
-    init_logging(Path::new(config.config_path()))?;
+    init_logging(Path::new(config.state_path()))?;
     init_keybindings(Path::new(config.config_path()))?;
 
     let image = resolve_image_from_config(&config)
