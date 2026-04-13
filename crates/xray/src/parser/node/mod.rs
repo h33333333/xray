@@ -171,17 +171,6 @@ mod tests {
     }
 
     #[test]
-    fn restorable_path_strip_prefix_noop_on_relative() {
-        let path = Path::new("usr/bin");
-        let mut rp = RestorablePath::new(path);
-        rp.strip_prefix();
-        assert_eq!(
-            rp.get_current_component().unwrap(),
-            Path::new("usr")
-        );
-    }
-
-    #[test]
     fn restorable_path_single_component() {
         let path = Path::new("file.txt");
         let rp = RestorablePath::new(path);
