@@ -44,7 +44,13 @@ impl AppState {
     /// Creates a new instance of the [AppState] using data from the provided [Image].
     pub fn new(mut image: Image) -> anyhow::Result<Self> {
         let panes = init_panes(&mut image).context("failed to init panes")?;
-        let clipboard = Clipboard::new().ok();
+        let clipboard = match Clipboard::new() {
+            Ok(clipboard) => Some(clipboard),
+            Err(e) => {
+                tracing::warn!("clipboard support is unavailable: {}", e);
+                None
+            }
+        };
 
         Ok(AppState {
             panes,
