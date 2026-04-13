@@ -118,3 +118,169 @@ fn has_tar_magic_number(buf: impl AsRef<[u8]>) -> bool {
 
     true
 }
+
+#[cfg(test)]
+mod tests {
+    use std::io::Cursor;
+
+    use super::*;
+
+    // --- sha256_digest_from_hex ---
+
+    #[test]
+    fn sha256_from_hex_valid() {
+        let hex = b"a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3";
+        let result = sha256_digest_from_hex(hex).unwrap();
+        let expected: [u8; 32] = [
+            0xa6, 0x65, 0xa4, 0x59, 0x20, 0x42, 0x2f, 0x9d,
+            0x41, 0x7e, 0x48, 0x67, 0xef, 0xdc, 0x4f, 0xb8,
+            0xa0, 0x4a, 0x1f, 0x3f, 0xff, 0x1f, 0xa0, 0x7e,
+            0x99, 0x8e, 0x86, 0xf7, 0xf7, 0xa2, 0x7a, 0xe3,
+        ];
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn sha256_from_hex_uppercase() {
+        let hex = b"A665A45920422F9D417E4867EFDC4FB8A04A1F3FFF1FA07E998E86F7F7A27AE3";
+        let result = sha256_digest_from_hex(hex).unwrap();
+        assert_eq!(result[0], 0xa6);
+        assert_eq!(result[31], 0xe3);
+    }
+
+    #[test]
+    fn sha256_from_hex_all_zeros() {
+        let hex = b"0000000000000000000000000000000000000000000000000000000000000000";
+        let result = sha256_digest_from_hex(hex).unwrap();
+        assert_eq!(result, [0u8; 32]);
+    }
+
+    #[test]
+    fn sha256_from_hex_wrong_length() {
+        let hex = b"a665a459";
+        let result = sha256_digest_from_hex(hex);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn sha256_from_hex_too_long() {
+        let hex = b"a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3ff";
+        let result = sha256_digest_from_hex(hex);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn sha256_from_hex_invalid_chars() {
+        // 'zz' is not valid hex
+        let hex = b"zz65a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3";
+        let result = sha256_digest_from_hex(hex);
+        assert!(result.is_err());
+    }
+
+    // --- get_entry_size_in_blocks ---
+
+    #[test]
+    fn entry_size_zero_returns_zero_blocks() {
+        let mut header = Header::new_gnu();
+        header.set_size(0);
+        assert_eq!(get_entry_size_in_blocks(&header).unwrap(), 0);
+    }
+
+    #[test]
+    fn entry_size_exactly_one_block() {
+        let mut header = Header::new_gnu();
+        header.set_size(TAR_BLOCK_SIZE as u64);
+        assert_eq!(get_entry_size_in_blocks(&header).unwrap(), 1);
+    }
+
+    #[test]
+    fn entry_size_one_byte_over_block() {
+        let mut header = Header::new_gnu();
+        header.set_size(TAR_BLOCK_SIZE as u64 + 1);
+        assert_eq!(get_entry_size_in_blocks(&header).unwrap(), 2);
+    }
+
+    #[test]
+    fn entry_size_one_byte() {
+        let mut header = Header::new_gnu();
+        header.set_size(1);
+        assert_eq!(get_entry_size_in_blocks(&header).unwrap(), 1);
+    }
+
+    #[test]
+    fn entry_size_multiple_blocks_exact() {
+        let mut header = Header::new_gnu();
+        header.set_size(TAR_BLOCK_SIZE as u64 * 5);
+        assert_eq!(get_entry_size_in_blocks(&header).unwrap(), 5);
+    }
+
+    // --- determine_blob_type ---
+
+    #[test]
+    fn blob_type_gzip() {
+        let mut buf = [0u8; TAR_BLOCK_SIZE];
+        // Gzip magic: 0x1f 0x8b followed by other data
+        let data = {
+            let mut d = vec![0x1f, 0x8b];
+            d.extend(vec![0u8; TAR_BLOCK_SIZE - 2]);
+            d
+        };
+        let mut cursor = Cursor::new(data);
+        let (blob_type, _) = determine_blob_type(&mut buf, &mut cursor).unwrap();
+        assert!(matches!(blob_type, BlobType::GzippedTar));
+    }
+
+    #[test]
+    fn blob_type_tar() {
+        let mut buf = [0u8; TAR_BLOCK_SIZE];
+        let mut data = vec![0u8; TAR_BLOCK_SIZE];
+        data[TAR_MAGIC_NUMBER_START_IDX
+            ..TAR_MAGIC_NUMBER_START_IDX + TAR_MAGIC_NUMBER.len()]
+            .copy_from_slice(TAR_MAGIC_NUMBER);
+        // Put non-zero data before the magic so it doesn't match Empty
+        data[0] = 0x01;
+        let mut cursor = Cursor::new(data);
+        let (blob_type, _) = determine_blob_type(&mut buf, &mut cursor).unwrap();
+        assert!(matches!(blob_type, BlobType::Tar));
+    }
+
+    #[test]
+    fn blob_type_empty() {
+        let mut buf = [0u8; TAR_BLOCK_SIZE];
+        let data = vec![0u8; TAR_BLOCK_SIZE];
+        let mut cursor = Cursor::new(data);
+        let (blob_type, _) = determine_blob_type(&mut buf, &mut cursor).unwrap();
+        assert!(matches!(blob_type, BlobType::Empty));
+    }
+
+    #[test]
+    fn blob_type_json_fallback() {
+        let mut buf = [0u8; TAR_BLOCK_SIZE];
+        // Non-zero data that isn't gzip or tar magic
+        let mut data = vec![0x7b; TAR_BLOCK_SIZE]; // 0x7b = '{'
+        // Make sure it doesn't accidentally have tar magic
+        data[TAR_MAGIC_NUMBER_START_IDX] = 0x7b;
+        let mut cursor = Cursor::new(data);
+        let (blob_type, _) = determine_blob_type(&mut buf, &mut cursor).unwrap();
+        assert!(matches!(blob_type, BlobType::Json));
+    }
+
+    #[test]
+    fn blob_type_unknown_on_empty_reader() {
+        let mut buf = [0u8; TAR_BLOCK_SIZE];
+        let data: Vec<u8> = vec![];
+        let mut cursor = Cursor::new(data);
+        let (blob_type, _) = determine_blob_type(&mut buf, &mut cursor).unwrap();
+        assert!(matches!(blob_type, BlobType::Unknown));
+    }
+
+    #[test]
+    fn blob_type_json_on_short_input() {
+        let mut buf = [0u8; TAR_BLOCK_SIZE];
+        // Short non-gzip data that hits EOF before filling a full block
+        let data = b"{\"layers\": []}".to_vec();
+        let mut cursor = Cursor::new(data);
+        let (blob_type, _) = determine_blob_type(&mut buf, &mut cursor).unwrap();
+        assert!(matches!(blob_type, BlobType::Json));
+    }
+}

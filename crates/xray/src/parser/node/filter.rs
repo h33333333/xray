@@ -105,3 +105,246 @@ impl<'a, 'r> NodeFilters<'a, 'r> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::borrow::Cow;
+    use std::path::Path;
+
+    use regex::Regex;
+
+    use super::*;
+    use crate::parser::{FileState, Node, NodeStatus};
+
+    fn make_file(size: u64) -> super::super::InnerNode {
+        super::super::InnerNode::File(FileState::new(
+            NodeStatus::Added(size),
+            None,
+        ))
+    }
+
+    fn build_tree() -> Node {
+        // Build:
+        //   usr/
+        //     bin/
+        //       grep (50)
+        //       find (30)
+        //     lib/
+        //       libc.so (1000)
+        //   etc/
+        //     hosts (10)
+        //   tmp/
+        //     cache (5)
+        let mut root = Node::new(0);
+        root.insert(
+            &mut RestorablePath::new(Path::new("usr/bin/grep")),
+            make_file(50),
+            0,
+        )
+        .unwrap();
+        root.insert(
+            &mut RestorablePath::new(Path::new("usr/bin/find")),
+            make_file(30),
+            0,
+        )
+        .unwrap();
+        root.insert(
+            &mut RestorablePath::new(Path::new("usr/lib/libc.so")),
+            make_file(1000),
+            0,
+        )
+        .unwrap();
+        root.insert(
+            &mut RestorablePath::new(Path::new("etc/hosts")),
+            make_file(10),
+            0,
+        )
+        .unwrap();
+        root.insert(
+            &mut RestorablePath::new(Path::new("tmp/cache")),
+            make_file(5),
+            1,
+        )
+        .unwrap();
+        root
+    }
+
+    fn remaining_paths(node: &Node) -> Vec<String> {
+        node.iter()
+            .map(|(path, _, _, _)| path.to_string_lossy().to_string())
+            .collect()
+    }
+
+    // --- Size filter ---
+
+    #[test]
+    fn filter_by_size_removes_small_files_and_empty_dirs() {
+        let mut tree = build_tree();
+        let filter = NodeFilters::default().with_size_filter(100);
+        tree.filter(filter);
+
+        let paths = remaining_paths(&tree);
+        // Only libc.so (1000) and its ancestor dirs should survive
+        assert!(paths.contains(&"libc.so".to_string()));
+        assert!(paths.contains(&"usr".to_string()));
+        assert!(paths.contains(&"lib".to_string()));
+        // Dirs whose children were all filtered out should be gone
+        assert!(!paths.contains(&"bin".to_string()));
+        assert!(!paths.contains(&"etc".to_string()));
+        assert!(!paths.contains(&"tmp".to_string()));
+        assert!(!paths.contains(&"grep".to_string()));
+        assert!(!paths.contains(&"hosts".to_string()));
+    }
+
+    #[test]
+    fn filter_by_size_keeps_equal() {
+        let mut tree = build_tree();
+        let filter = NodeFilters::default().with_size_filter(50);
+        tree.filter(filter);
+
+        let paths = remaining_paths(&tree);
+        assert!(paths.contains(&"grep".to_string()));
+        assert!(paths.contains(&"libc.so".to_string()));
+        assert!(!paths.contains(&"find".to_string())); // 30 < 50
+    }
+
+    // --- Layer change filter ---
+
+    #[test]
+    fn filter_by_layer_shows_only_that_layers_changes() {
+        let mut tree = build_tree();
+        // Layer 1 only has tmp/cache
+        let filter = NodeFilters::default().with_show_files_changed_in_layer(1);
+        tree.filter(filter);
+
+        let paths = remaining_paths(&tree);
+        assert!(paths.contains(&"cache".to_string()));
+        // Layer 0 files should be gone
+        assert!(!paths.contains(&"grep".to_string()));
+        assert!(!paths.contains(&"libc.so".to_string()));
+    }
+
+    // --- Path filter (absolute) ---
+
+    #[test]
+    fn filter_by_absolute_path() {
+        let mut tree = build_tree();
+        let filter = NodeFilters::default().with_path_filter(Path::new("/usr/bin"));
+        tree.filter(filter);
+
+        let paths = remaining_paths(&tree);
+        // Matched files and their ancestor dirs are retained
+        assert!(paths.contains(&"usr".to_string()));
+        assert!(paths.contains(&"bin".to_string()));
+        assert!(paths.contains(&"grep".to_string()));
+        assert!(paths.contains(&"find".to_string()));
+        // Unmatched subtrees are gone
+        assert!(!paths.contains(&"lib".to_string()));
+        assert!(!paths.contains(&"etc".to_string()));
+        assert!(!paths.contains(&"hosts".to_string()));
+    }
+
+    // --- Path filter (relative / partial match) ---
+
+    #[test]
+    fn filter_by_relative_path_matches_partial() {
+        let mut tree = build_tree();
+        let filter = NodeFilters::default().with_path_filter(Path::new("bin"));
+        tree.filter(filter);
+
+        let paths = remaining_paths(&tree);
+        assert!(paths.contains(&"grep".to_string()));
+        assert!(paths.contains(&"find".to_string()));
+    }
+
+    // --- Regex filter ---
+
+    #[test]
+    fn filter_by_regex_matches_filenames() {
+        let mut tree = build_tree();
+        let regex = Regex::new(r"\.so$").unwrap();
+        let filter = NodeFilters::default().with_regex(Cow::Owned(regex));
+        tree.filter(filter);
+
+        let paths = remaining_paths(&tree);
+        assert!(paths.contains(&"libc.so".to_string()));
+        assert!(!paths.contains(&"grep".to_string()));
+        assert!(!paths.contains(&"hosts".to_string()));
+    }
+
+    #[test]
+    fn filter_by_regex_no_match_empties_tree() {
+        let mut tree = build_tree();
+        let regex = Regex::new(r"^zzz_nonexistent$").unwrap();
+        let filter = NodeFilters::default().with_regex(Cow::Owned(regex));
+        let has_nodes = tree.filter(filter);
+
+        assert!(!has_nodes);
+    }
+
+    // --- No filter retains everything ---
+
+    #[test]
+    fn no_filter_retains_all() {
+        let mut tree = build_tree();
+        let filter = NodeFilters::default();
+        tree.filter(filter);
+
+        let paths = remaining_paths(&tree);
+        // 5 dirs (usr, bin, lib, etc, tmp) + 5 files (grep, find, libc.so, hosts, cache)
+        assert_eq!(paths.len(), 10);
+    }
+
+    // --- NodeFilters builder queries ---
+
+    #[test]
+    fn any_returns_false_when_empty() {
+        let f = NodeFilters::default();
+        assert!(!f.any());
+    }
+
+    #[test]
+    fn any_returns_true_with_size_filter() {
+        let f = NodeFilters::default().with_size_filter(100);
+        assert!(f.any());
+    }
+
+    #[test]
+    fn only_changed_nodes_filter_true_when_only_layer_set() {
+        let f = NodeFilters::default().with_show_files_changed_in_layer(0);
+        assert!(f.only_changed_nodes_filter());
+    }
+
+    #[test]
+    fn only_changed_nodes_filter_false_with_size_too() {
+        let f = NodeFilters::default()
+            .with_size_filter(10)
+            .with_show_files_changed_in_layer(0);
+        assert!(!f.only_changed_nodes_filter());
+    }
+
+    #[test]
+    fn any_non_path_filter_false_with_only_path() {
+        let f = NodeFilters::default().with_path_filter(Path::new("/usr"));
+        assert!(!f.any_non_path_filter());
+    }
+
+    #[test]
+    fn any_non_path_filter_false_with_only_regex() {
+        let regex = Regex::new(r"foo").unwrap();
+        let f = NodeFilters::default().with_regex(Cow::Owned(regex));
+        assert!(!f.any_non_path_filter());
+    }
+
+    #[test]
+    fn any_non_path_filter_true_with_size() {
+        let f = NodeFilters::default().with_size_filter(100);
+        assert!(f.any_non_path_filter());
+    }
+
+    #[test]
+    fn any_non_path_filter_true_with_layer() {
+        let f = NodeFilters::default().with_show_files_changed_in_layer(2);
+        assert!(f.any_non_path_filter());
+    }
+}
