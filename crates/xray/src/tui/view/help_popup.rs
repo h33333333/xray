@@ -7,46 +7,14 @@ use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, BorderType, Paragraph, Widget, Wrap};
 
 use super::ActivePane;
-use super::pane::{
-    FIELD_KEY_STYLE, FIELD_VALUE_STYLE, LayerInspectorNodeStyles,
-};
+use super::pane::{FIELD_KEY_STYLE, FIELD_VALUE_STYLE};
 use crate::keybindings::KeyAction;
 use crate::tui::store::AppState;
 
-const COLOR_GUIDE: &[(&[Color], &str)] = &[
-    (
-        &[
-            LayerInspectorNodeStyles::get_added_node_style(true)
-                .fg
-                .expect("should be present"),
-            LayerInspectorNodeStyles::get_added_node_style(false)
-                .fg
-                .expect("should be present"),
-        ],
-        "Added in the current layer",
-    ),
-    (
-        &[
-            LayerInspectorNodeStyles::get_modified_node_style(true)
-                .fg
-                .expect("should be present"),
-            LayerInspectorNodeStyles::get_modified_node_style(false)
-                .fg
-                .expect("should be present"),
-        ],
-        "Modified in the current layer",
-    ),
-    (
-        &[
-            LayerInspectorNodeStyles::get_deleted_node_style(true)
-                .fg
-                .expect("should be present"),
-            LayerInspectorNodeStyles::get_deleted_node_style(false)
-                .fg
-                .expect("should be present"),
-        ],
-        "Deleted in the current layer",
-    ),
+const COLOR_GUIDE: &[(Color, &str)] = &[
+    (Color::Green, "Added in the current layer"),
+    (Color::Yellow, "Modified in the current layer"),
+    (Color::Red, "Deleted in the current layer"),
 ];
 
 /// A simple help popup that displays all hotkeys and other useful information.
@@ -178,7 +146,7 @@ fn format_hotkeys_section(
             Span::styled(
                 format!("{hotkey:>longest_hotkey$}  "),
                 // Make the hotkeys easier to see among the text
-                FIELD_KEY_STYLE.fg(Color::LightBlue),
+                FIELD_KEY_STYLE.fg(Color::Cyan),
             ),
             Span::styled(description, FIELD_VALUE_STYLE),
         ])
@@ -196,13 +164,8 @@ fn format_color_guide_section() -> impl Iterator<Item = Line<'static>> {
     )
     .into_iter()
     .chain(chainable_blank_line())
-    .chain(COLOR_GUIDE.iter().map(|&(colors, description)| {
-        let mut colors = colors
-            .iter()
-            .map(|&color| Span::styled("   ", Style::new().bg(color)))
-            .intersperse(Span::styled(" or ", FIELD_VALUE_STYLE))
-            .collect::<Vec<_>>();
-
+    .chain(COLOR_GUIDE.iter().map(|&(color, description)| {
+        let mut colors = vec![Span::styled("   ", Style::new().bg(color))];
         // Separator between colors and their meaning
         colors.push(Span::styled("  ", FIELD_VALUE_STYLE));
         // Actual description
