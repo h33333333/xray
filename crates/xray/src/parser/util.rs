@@ -129,20 +129,21 @@ mod tests {
 
     #[test]
     fn sha256_from_hex_valid() {
-        let hex = b"a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3";
+        let hex =
+            b"a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3";
         let result = sha256_digest_from_hex(hex).unwrap();
         let expected: [u8; 32] = [
-            0xa6, 0x65, 0xa4, 0x59, 0x20, 0x42, 0x2f, 0x9d,
-            0x41, 0x7e, 0x48, 0x67, 0xef, 0xdc, 0x4f, 0xb8,
-            0xa0, 0x4a, 0x1f, 0x3f, 0xff, 0x1f, 0xa0, 0x7e,
-            0x99, 0x8e, 0x86, 0xf7, 0xf7, 0xa2, 0x7a, 0xe3,
+            0xa6, 0x65, 0xa4, 0x59, 0x20, 0x42, 0x2f, 0x9d, 0x41, 0x7e, 0x48,
+            0x67, 0xef, 0xdc, 0x4f, 0xb8, 0xa0, 0x4a, 0x1f, 0x3f, 0xff, 0x1f,
+            0xa0, 0x7e, 0x99, 0x8e, 0x86, 0xf7, 0xf7, 0xa2, 0x7a, 0xe3,
         ];
         assert_eq!(result, expected);
     }
 
     #[test]
     fn sha256_from_hex_uppercase() {
-        let hex = b"A665A45920422F9D417E4867EFDC4FB8A04A1F3FFF1FA07E998E86F7F7A27AE3";
+        let hex =
+            b"A665A45920422F9D417E4867EFDC4FB8A04A1F3FFF1FA07E998E86F7F7A27AE3";
         let result = sha256_digest_from_hex(hex).unwrap();
         assert_eq!(result[0], 0xa6);
         assert_eq!(result[31], 0xe3);
@@ -150,7 +151,8 @@ mod tests {
 
     #[test]
     fn sha256_from_hex_all_zeros() {
-        let hex = b"0000000000000000000000000000000000000000000000000000000000000000";
+        let hex =
+            b"0000000000000000000000000000000000000000000000000000000000000000";
         let result = sha256_digest_from_hex(hex).unwrap();
         assert_eq!(result, [0u8; 32]);
     }
@@ -172,7 +174,8 @@ mod tests {
     #[test]
     fn sha256_from_hex_invalid_chars() {
         // 'zz' is not valid hex
-        let hex = b"zz65a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3";
+        let hex =
+            b"zz65a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3";
         let result = sha256_digest_from_hex(hex);
         assert!(result.is_err());
     }
@@ -226,7 +229,8 @@ mod tests {
             d
         };
         let mut cursor = Cursor::new(data);
-        let (blob_type, _) = determine_blob_type(&mut buf, &mut cursor).unwrap();
+        let (blob_type, _) =
+            determine_blob_type(&mut buf, &mut cursor).unwrap();
         assert!(matches!(blob_type, BlobType::GzippedTar));
     }
 
@@ -240,7 +244,8 @@ mod tests {
         // Put non-zero data before the magic so it doesn't match Empty
         data[0] = 0x01;
         let mut cursor = Cursor::new(data);
-        let (blob_type, _) = determine_blob_type(&mut buf, &mut cursor).unwrap();
+        let (blob_type, _) =
+            determine_blob_type(&mut buf, &mut cursor).unwrap();
         assert!(matches!(blob_type, BlobType::Tar));
     }
 
@@ -249,7 +254,8 @@ mod tests {
         let mut buf = [0u8; TAR_BLOCK_SIZE];
         let data = vec![0u8; TAR_BLOCK_SIZE];
         let mut cursor = Cursor::new(data);
-        let (blob_type, _) = determine_blob_type(&mut buf, &mut cursor).unwrap();
+        let (blob_type, _) =
+            determine_blob_type(&mut buf, &mut cursor).unwrap();
         assert!(matches!(blob_type, BlobType::Empty));
     }
 
@@ -261,7 +267,8 @@ mod tests {
         // Make sure it doesn't accidentally have tar magic
         data[TAR_MAGIC_NUMBER_START_IDX] = 0x7b;
         let mut cursor = Cursor::new(data);
-        let (blob_type, _) = determine_blob_type(&mut buf, &mut cursor).unwrap();
+        let (blob_type, _) =
+            determine_blob_type(&mut buf, &mut cursor).unwrap();
         assert!(matches!(blob_type, BlobType::Json));
     }
 
@@ -270,7 +277,8 @@ mod tests {
         let mut buf = [0u8; TAR_BLOCK_SIZE];
         let data: Vec<u8> = vec![];
         let mut cursor = Cursor::new(data);
-        let (blob_type, _) = determine_blob_type(&mut buf, &mut cursor).unwrap();
+        let (blob_type, _) =
+            determine_blob_type(&mut buf, &mut cursor).unwrap();
         assert!(matches!(blob_type, BlobType::Unknown));
     }
 
@@ -280,7 +288,8 @@ mod tests {
         // Short non-gzip data that hits EOF before filling a full block
         let data = b"{\"layers\": []}".to_vec();
         let mut cursor = Cursor::new(data);
-        let (blob_type, _) = determine_blob_type(&mut buf, &mut cursor).unwrap();
+        let (blob_type, _) =
+            determine_blob_type(&mut buf, &mut cursor).unwrap();
         assert!(matches!(blob_type, BlobType::Json));
     }
 }

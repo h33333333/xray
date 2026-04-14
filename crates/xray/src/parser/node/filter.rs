@@ -229,7 +229,8 @@ mod tests {
     #[test]
     fn filter_by_absolute_path() {
         let mut tree = build_tree();
-        let filter = NodeFilters::default().with_path_filter(Path::new("/usr/bin"));
+        let filter =
+            NodeFilters::default().with_path_filter(Path::new("/usr/bin"));
         tree.filter(filter);
 
         let paths = remaining_paths(&tree);
