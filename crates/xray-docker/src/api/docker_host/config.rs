@@ -33,7 +33,7 @@ impl DockerConfig {
 
         if !fs::exists(&config_dir).map_err(|e| {
             DockerError::from_io_error_with_description(e, || {
-                "faild to check if a the Docker config exists".into()
+                "failed to check if a the Docker config exists".into()
             })
         })? {
             // We can't continue if there is no Docker config

@@ -2,7 +2,7 @@
 name = "xray-docker"
 description = "A collection of Docker-specific utilites, required for xray-tui to work"
 authors = ["h33333333"]
-license-file = "../../COPYING"
+license = "GPL-3.0-or-later"
 readme = "../../README.md"
 repository = "https://github.com/h33333333/xray"
 documentation = "https://github.com/h33333333/xray"

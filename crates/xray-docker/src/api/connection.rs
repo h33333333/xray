@@ -192,7 +192,7 @@ impl DockerApiConnection {
         }
     }
 
-    /// Reads the remaining resonse body from the underlying HTTP socket into the provided buffer.
+    /// Reads the remaining response body from the underlying HTTP socket into the provided buffer.
     ///
     /// This function might not do any operations if we've already read the full body while parsing the HTTP request metadata.
     fn read_response_body(

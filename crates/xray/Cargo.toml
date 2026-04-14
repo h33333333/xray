@@ -6,7 +6,7 @@ description = "A layer inspector for OCI-compliant images"
 authors = ["h33333333"]
 categories = ["command-line-utilities"]
 keywords = ["terminal", "tui", "docker", "image", "container"]
-license-file = "../../COPYING"
+license = "GPL-3.0-or-later"
 readme = "../../README.md"
 repository = "https://github.com/h33333333/xray"
 documentation = "https://github.com/h33333333/xray"
@@ -23,7 +23,7 @@ crossterm = "0.29.0"
 crossterm-keybind = "0.4.0"
 dirs = "6.0.0"
 indexmap = "2.7.1"
-ratatui = "0.29.0"
+ratatui = "0.30.0"
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.137"
 tracing = "0.1.41"

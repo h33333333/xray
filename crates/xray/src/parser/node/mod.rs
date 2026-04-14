@@ -117,20 +117,11 @@ mod tests {
     fn restorable_path_components_advance() {
         let path = Path::new("usr/local/bin");
         let rp = RestorablePath::new(path);
-        assert_eq!(
-            rp.get_current_component().unwrap(),
-            Path::new("usr")
-        );
+        assert_eq!(rp.get_current_component().unwrap(), Path::new("usr"));
         let rp = rp.advance();
-        assert_eq!(
-            rp.get_current_component().unwrap(),
-            Path::new("local")
-        );
+        assert_eq!(rp.get_current_component().unwrap(), Path::new("local"));
         let rp = rp.advance();
-        assert_eq!(
-            rp.get_current_component().unwrap(),
-            Path::new("bin")
-        );
+        assert_eq!(rp.get_current_component().unwrap(), Path::new("bin"));
         let rp = rp.advance();
         assert!(rp.get_current_component().is_none());
     }
@@ -140,15 +131,9 @@ mod tests {
         let path = Path::new("a/b/c");
         let rp = RestorablePath::new(path);
         let rp = rp.advance().advance();
-        assert_eq!(
-            rp.get_current_component().unwrap(),
-            Path::new("c")
-        );
+        assert_eq!(rp.get_current_component().unwrap(), Path::new("c"));
         let rp = rp.restore();
-        assert_eq!(
-            rp.get_current_component().unwrap(),
-            Path::new("a")
-        );
+        assert_eq!(rp.get_current_component().unwrap(), Path::new("a"));
     }
 
     #[test]
@@ -164,20 +149,14 @@ mod tests {
         let path = Path::new("/usr/bin");
         let mut rp = RestorablePath::new(path);
         rp.strip_prefix();
-        assert_eq!(
-            rp.get_current_component().unwrap(),
-            Path::new("usr")
-        );
+        assert_eq!(rp.get_current_component().unwrap(), Path::new("usr"));
     }
 
     #[test]
     fn restorable_path_single_component() {
         let path = Path::new("file.txt");
         let rp = RestorablePath::new(path);
-        assert_eq!(
-            rp.get_current_component().unwrap(),
-            Path::new("file.txt")
-        );
+        assert_eq!(rp.get_current_component().unwrap(), Path::new("file.txt"));
         let rp = rp.advance();
         assert!(rp.get_current_component().is_none());
     }
@@ -199,12 +178,8 @@ mod tests {
     fn insert_single_file_at_root() {
         let mut root = Node::new(0);
         let file = make_file_node(100);
-        root.insert(
-            &mut RestorablePath::new(Path::new("hello.txt")),
-            file,
-            0,
-        )
-        .unwrap();
+        root.insert(&mut RestorablePath::new(Path::new("hello.txt")), file, 0)
+            .unwrap();
 
         let children = root.inner.children().unwrap();
         assert!(children.contains_key(Path::new("hello.txt")));
@@ -265,7 +240,11 @@ mod tests {
             0,
         )
         .unwrap();
-        assert!(!root.inner.children().unwrap()[Path::new("lib")].inner.is_dir());
+        assert!(
+            !root.inner.children().unwrap()[Path::new("lib")]
+                .inner
+                .is_dir()
+        );
 
         // Now insert a child under "lib" -- should convert it to a directory
         root.insert(
@@ -274,7 +253,11 @@ mod tests {
             1,
         )
         .unwrap();
-        assert!(root.inner.children().unwrap()[Path::new("lib")].inner.is_dir());
+        assert!(
+            root.inner.children().unwrap()[Path::new("lib")]
+                .inner
+                .is_dir()
+        );
     }
 
     // --- InnerNode merge ---
@@ -453,11 +436,14 @@ mod tests {
         let paths: Vec<_> =
             root.iter().map(|(path, _, _, _)| path.to_owned()).collect();
         // BTreeMap ordering: a, b, c
-        assert_eq!(paths, vec![
-            Path::new("a").to_owned(),
-            Path::new("b").to_owned(),
-            Path::new("c").to_owned(),
-        ]);
+        assert_eq!(
+            paths,
+            vec![
+                Path::new("a").to_owned(),
+                Path::new("b").to_owned(),
+                Path::new("c").to_owned(),
+            ]
+        );
     }
 
     #[test]

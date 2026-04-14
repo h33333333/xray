@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::path::Path;
 
 use ratatui::layout::Constraint;
-use ratatui::style::{Modifier, Style, Stylize};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, BorderType, Padding, Paragraph, Wrap};
 use regex::Regex;
@@ -174,13 +174,19 @@ impl FilterPopup {
             |seq: &'static str, description: &'static str| {
                 if keybindings.len() > 1 {
                     // Separate keybindings
-                    keybindings.push(Span::styled(", ", Style::new().add_modifier(Modifier::DIM)));
+                    keybindings.push(Span::styled(
+                        ", ",
+                        Style::new().add_modifier(Modifier::DIM),
+                    ));
                 }
 
                 // Add the key sequence
                 keybindings.push(Span::styled(seq, Style::new().bold()));
                 // Separator
-                keybindings.push(Span::styled(" - ", Style::new().add_modifier(Modifier::DIM)));
+                keybindings.push(Span::styled(
+                    " - ",
+                    Style::new().add_modifier(Modifier::DIM),
+                ));
                 // Add the description
                 keybindings.push(Span::styled(
                     description,

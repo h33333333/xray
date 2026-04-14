@@ -96,7 +96,7 @@ fn render(frame: &mut Frame, state: &AppState) -> anyhow::Result<()> {
     // Render the command bar
     frame.render_widget(
         CommandBar::render(state)
-            .context("failed to redner the command bar")?,
+            .context("failed to render the command bar")?,
         state.command_bar_area,
     );
 

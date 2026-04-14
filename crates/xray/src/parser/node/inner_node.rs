@@ -203,7 +203,7 @@ impl InnerNode {
                         && !filter.any_non_path_filter()
                     {
                         // This is only reachable if the current node matched the last component in the path filter and the global filter doesn't contain any non-path filtering.
-                        // In this case, we simply inclue the node and don't do any further child filtering (as their parent passed the check).
+                        // In this case, we simply include the node and don't do any further child filtering (as their parent passed the check).
                         return true;
                     }
 

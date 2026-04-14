@@ -18,7 +18,6 @@ pub use layer_selector::LayerSelectorPane;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style, Stylize};
 use ratatui::text::{Line, Text};
-use ratatui::widgets::block::Title;
 use ratatui::widgets::{Block, BorderType, Paragraph, Widget, Wrap};
 use style::{ACTIVE_FIELD_STYLE, text_style};
 pub(super) use style::{
@@ -40,7 +39,7 @@ use crate::tui::util::encode_hex;
 pub enum Pane {
     /// Contains all image-related information from [crate::parser::Image].
     ImageInfo(ImageInfoPane),
-    /// Displays infromation about the [LayerSelectorPane::selected_layer].
+    /// Displays information about the [LayerSelectorPane::selected_layer].
     LayerInfo(LayerInfoPane),
     /// Allows switching between [Layers](crate::parser::Layer) of the [crate::parser::Image].
     LayerSelector(LayerSelectorPane),
@@ -380,7 +379,7 @@ impl Pane {
     }
 
     /// Returns a styled [Title] for the pane.
-    fn get_styled_title(&self, is_active: bool) -> impl Into<Title<'static>> {
+    fn get_styled_title(&self, is_active: bool) -> impl Into<Line<'static>> {
         let title = match self {
             Pane::ImageInfo(..) => "Image Information",
             Pane::LayerSelector(..) => "Layers",

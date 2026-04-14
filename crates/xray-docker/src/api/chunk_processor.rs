@@ -57,12 +57,12 @@ impl ChunkProcessor {
     /// Returns the updated buffer without the skipped bytes.
     fn skip_bytes<'a>(&mut self, src: &'a [u8]) -> &'a [u8] {
         if let Some(bytes_to_skip) = self.skip_bytes {
-            let availalbe_bytes_to_skip = bytes_to_skip.min(src.len());
-            self.skip_bytes = match availalbe_bytes_to_skip == bytes_to_skip {
+            let available_bytes_to_skip = bytes_to_skip.min(src.len());
+            self.skip_bytes = match available_bytes_to_skip == bytes_to_skip {
                 true => None,
-                false => Some(bytes_to_skip - availalbe_bytes_to_skip),
+                false => Some(bytes_to_skip - available_bytes_to_skip),
             };
-            &src[availalbe_bytes_to_skip..]
+            &src[available_bytes_to_skip..]
         } else {
             src
         }

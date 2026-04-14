@@ -331,7 +331,7 @@ impl LayerInspectorPane {
                 current_node
                     .inner
                     .get_n_of_child_nodes()
-                    .context("bug: should have been unreacheable")?,
+                    .context("bug: should have been unreachable")?,
             );
         }
 
@@ -409,7 +409,7 @@ impl LayerInspectorPane {
     fn nodes_to_skip_before_current_node(&self, visible_rows: usize) -> usize {
         // Convert to zero-based index
         let visible_space = visible_rows.saturating_sub(1);
-        // Calculate how many nodes we need to skip without accouting for any collapsed directories
+        // Calculate how many nodes we need to skip without accounting for any collapsed directories
         let base_skip_count = self.current_node_idx.saturating_sub(
             self.collapsed_nodes_before_current + visible_space,
         );

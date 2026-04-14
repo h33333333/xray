@@ -10,7 +10,7 @@ use super::RestorablePath;
 pub struct NodeFilters<'a, 'r> {
     /// A standard path filter.
     ///
-    /// Suppots both relative and absolute paths.
+    /// Supports both relative and absolute paths.
     pub(super) path_filter: Option<RestorablePath<'a>>,
     /// Won't display size whose size is lower than the specified number of bytes.
     pub(super) node_size_filter: Option<u64>,
@@ -229,7 +229,8 @@ mod tests {
     #[test]
     fn filter_by_absolute_path() {
         let mut tree = build_tree();
-        let filter = NodeFilters::default().with_path_filter(Path::new("/usr/bin"));
+        let filter =
+            NodeFilters::default().with_path_filter(Path::new("/usr/bin"));
         tree.filter(filter);
 
         let paths = remaining_paths(&tree);
