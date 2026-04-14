@@ -80,5 +80,6 @@ jobs:
       - name: Deny
         uses: EmbarkStudios/cargo-deny-action@v2
         with:
+          rust-version: "nightly"
           command: check
           arguments: --workspace --all-features
