@@ -152,7 +152,7 @@ impl AppState {
         let (layer_inspector_pane_opt, _) =
             &mut self.panes[layer_inspector_pane_idx];
         layer_inspector_pane_opt
-            .replace(layer_inspector_pane.expect("unreacheable"));
+            .replace(layer_inspector_pane.expect("unreachable"));
 
         Ok(())
     }

@@ -39,7 +39,7 @@ use crate::tui::util::encode_hex;
 pub enum Pane {
     /// Contains all image-related information from [crate::parser::Image].
     ImageInfo(ImageInfoPane),
-    /// Displays infromation about the [LayerSelectorPane::selected_layer].
+    /// Displays information about the [LayerSelectorPane::selected_layer].
     LayerInfo(LayerInfoPane),
     /// Allows switching between [Layers](crate::parser::Layer) of the [crate::parser::Image].
     LayerSelector(LayerSelectorPane),

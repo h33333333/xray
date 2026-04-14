@@ -288,7 +288,7 @@ impl Parser {
                 if e.is_data() {
                     None
                 } else {
-                    anyhow::bail!("faield to parse a JSON blob: {}", e)
+                    anyhow::bail!("failed to parse a JSON blob: {}", e)
                 }
             }
         };
