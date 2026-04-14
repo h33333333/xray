@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::path::Path;
 
 use ratatui::layout::Constraint;
-use ratatui::style::{Modifier, Style, Stylize};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, BorderType, Padding, Paragraph, Wrap};
 use regex::Regex;

@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use anyhow::Context as _;
 use crossterm_keybind::KeyBindTrait as _;
-use ratatui::style::{Color, Style, Stylize};
+use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, BorderType, Paragraph, Widget, Wrap};
 

@@ -18,7 +18,6 @@ pub use layer_selector::LayerSelectorPane;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style, Stylize};
 use ratatui::text::{Line, Text};
-use ratatui::widgets::block::Title;
 use ratatui::widgets::{Block, BorderType, Paragraph, Widget, Wrap};
 use style::{ACTIVE_FIELD_STYLE, text_style};
 pub(super) use style::{
@@ -380,7 +379,7 @@ impl Pane {
     }
 
     /// Returns a styled [Title] for the pane.
-    fn get_styled_title(&self, is_active: bool) -> impl Into<Title<'static>> {
+    fn get_styled_title(&self, is_active: bool) -> impl Into<Line<'static>> {
         let title = match self {
             Pane::ImageInfo(..) => "Image Information",
             Pane::LayerSelector(..) => "Layers",
