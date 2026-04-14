@@ -58,6 +58,8 @@ skip = [
   { name = "windows-sys", version = "0.60.2" },
   # arboard@3.6.1
   { name = "foldhash", version = "0.1.5" },
+  # ratatui@0.30.0, crossterm-keybind@0.4.0
+  { name = "redox_syscall", version = "0.5.18" },
 ]
 
 [sources]
