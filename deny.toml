@@ -48,6 +48,8 @@ skip = [
   { name = "convert_case", version = "0.10.0" },
   # arboard@3.6.1
   { name = "hashbrown", version = "0.15.5" },
+  # ratatui@0.30.0
+  { name = "hashbrown", version = "0.16.1" },
   # homedir@0.3.6
   { name = "windows-link", version = "0.1.3" },
   # interprocess@2.4.0
