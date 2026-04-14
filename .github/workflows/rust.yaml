@@ -33,7 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: dtolnay/rust-toolchain@nightly-2026-04-05
+      - uses: dtolnay/rust-toolchain@nightly-2026-03-20
         with:
           components: clippy, rustfmt
 
@@ -52,7 +52,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: dtolnay/rust-toolchain@nightly-2026-04-05
+      - uses: dtolnay/rust-toolchain@nightly-2026-03-20
 
       - uses: Swatinem/rust-cache@v2
 
