@@ -110,23 +110,20 @@ impl AppDispatcher {
                         continue;
                     }
 
-                    // This match handles unconfigurable keybinds.
-                    match event {
-                        // Select a pane by its index
-                        KeyEvent {
-                            code: KeyCode::Char(code @ ('1' | '2' | '3' | '4')),
-                            ..
-                        } => {
-                            let index = code
+                    // This match handles selecting a pane by its index.
+                    if let KeyEvent {
+                        code: KeyCode::Char(code @ ('1' | '2' | '3' | '4')),
+                        ..
+                    } = event
+                    {
+                        let index = code
                         .to_digit(10)
                         .context("conversion to digit shouldn't fail, as we are sure about the contents")?
                         as usize;
-                            // Convert to a 0-based index.
-                            self.dispatch(AppAction::SelectPane(index - 1))?;
-                            continue;
-                        }
-                        _ => (),
-                    };
+                        // Convert to a 0-based index.
+                        self.dispatch(AppAction::SelectPane(index - 1))?;
+                        continue;
+                    }
 
                     // This handles all configurable keybinds.
                     for action in KeyAction::dispatch(&event) {
