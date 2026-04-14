@@ -16,11 +16,11 @@ pub use layer_info::LayerInfoPane;
 pub use layer_inspector::LayerInspectorPane;
 pub use layer_selector::LayerSelectorPane;
 use ratatui::layout::Rect;
-use ratatui::style::{Style, Stylize};
+use ratatui::style::{Modifier, Style, Stylize};
 use ratatui::text::{Line, Text};
 use ratatui::widgets::block::Title;
 use ratatui::widgets::{Block, BorderType, Paragraph, Widget, Wrap};
-use style::{ACTIVE_FIELD_STYLE, text_color};
+use style::{ACTIVE_FIELD_STYLE, text_style};
 pub(super) use style::{
     FIELD_KEY_STYLE, FIELD_VALUE_STYLE, LayerInspectorNodeStyles,
 };
@@ -59,16 +59,10 @@ impl Pane {
         let pane_is_active =
             state.active_pane == self.into() && !state.show_help_popup;
 
-        let text_color = text_color(pane_is_active);
-        // Don't override the field key's fg color unless the pane is not active.
-        let field_key_style = if pane_is_active && FIELD_KEY_STYLE.fg.is_some()
-        {
-            FIELD_KEY_STYLE
-        } else {
-            FIELD_KEY_STYLE.fg(text_color)
-        };
-        let field_value_style = FIELD_VALUE_STYLE.fg(text_color);
-        let active_field_style = ACTIVE_FIELD_STYLE.fg(text_color);
+        let pane_text_style = text_style(pane_is_active);
+        let field_key_style = FIELD_KEY_STYLE.patch(pane_text_style);
+        let field_value_style = FIELD_VALUE_STYLE.patch(pane_text_style);
+        let active_field_style = ACTIVE_FIELD_STYLE.patch(pane_text_style);
 
         // Two rows are taken by the block borders
         let remaining_rows = pane_rows - 2;
@@ -371,9 +365,9 @@ impl Pane {
     /// Returns a styled [Block] for the pane.
     fn get_styled_block(&self, is_active: bool) -> Block<'_> {
         let (border_type, border_style) = if is_active {
-            (BorderType::Thick, Style::new().white())
+            (BorderType::Thick, Style::new().add_modifier(Modifier::BOLD))
         } else {
-            (BorderType::Plain, Style::new().gray())
+            (BorderType::Plain, Style::new().add_modifier(Modifier::DIM))
         };
 
         Block::bordered()
@@ -395,9 +389,9 @@ impl Pane {
         };
 
         let title = if is_active {
-            title.bold().white()
+            title.bold()
         } else {
-            title.not_bold().gray()
+            title.not_bold().dim()
         };
 
         title.into_centered_line()

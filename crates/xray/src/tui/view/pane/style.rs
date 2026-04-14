@@ -17,27 +17,25 @@ pub struct LayerInspectorNodeStyles;
 impl LayerInspectorNodeStyles {
     /// A style for a node that is currently selected.
     const SELECTED_NODE_STYLE: Style =
-        Style::new().fg(Color::Black).bg(Color::White);
+        Style::new().add_modifier(Modifier::REVERSED);
 
     /// A style for a node that was added in the current layer and is inside the active pane.
-    const ACTIVE_PANE_ADDED_NODE_STYLE: Style =
-        Style::new().fg(Color::Indexed(106));
+    const ACTIVE_PANE_ADDED_NODE_STYLE: Style = Style::new().fg(Color::Green);
     /// A style for a node that was modified in the current layer and is inside the active pane.
     const ACTIVE_PANE_MODIFIED_NODE_STYLE: Style =
-        Style::new().fg(Color::Indexed(220));
+        Style::new().fg(Color::Yellow);
     /// A style for a node that was deleted in the current layer and is inside the active pane.
-    const ACTIVE_PANE_DELETED_NODE_STYLE: Style =
-        Style::new().fg(Color::Indexed(160));
+    const ACTIVE_PANE_DELETED_NODE_STYLE: Style = Style::new().fg(Color::Red);
 
     /// A style for a node that was added in the current layer and is inside the inactive pane.
     const INACTIVE_PANE_ADDED_NODE_STYLE: Style =
-        Style::new().fg(Color::Indexed(108));
+        Style::new().fg(Color::Green).add_modifier(Modifier::DIM);
     /// A style for a node that was modified in the current layer and is inside the inactive pane.
     const INACTIVE_PANE_MODIFIED_NODE_STYLE: Style =
-        Style::new().fg(Color::Indexed(222));
+        Style::new().fg(Color::Yellow).add_modifier(Modifier::DIM);
     /// A style for a node that was deleted in the current layer and is inside the inactive pane.
     const INACTIVE_PANE_DELETED_NODE_STYLE: Style =
-        Style::new().fg(Color::Indexed(124));
+        Style::new().fg(Color::Red).add_modifier(Modifier::DIM);
 
     pub const fn get_selected_node_style() -> Style {
         Self::SELECTED_NODE_STYLE
@@ -65,12 +63,12 @@ impl LayerInspectorNodeStyles {
     }
 }
 
-/// Returns the text [Color] based on whether the [Pane](super::Pane) is active.
-pub fn text_color(pane_is_active: bool) -> Color {
+/// Returns the base text [Style] based on whether the [Pane](super::Pane) is active.
+pub fn text_style(pane_is_active: bool) -> Style {
     if pane_is_active {
-        Color::White
+        Style::new()
     } else {
-        Color::Gray
+        Style::new().add_modifier(Modifier::DIM)
     }
 }
 
@@ -83,8 +81,8 @@ pub fn layer_status_indicator_style(
 ) -> Style {
     let style = Style::default();
     match layer_idx.cmp(selected_layer_idx) {
-        Ordering::Equal => style.bg(Color::LightGreen),
-        Ordering::Less => style.bg(Color::LightMagenta),
+        Ordering::Equal => style.bg(Color::Green),
+        Ordering::Less => style.bg(Color::Magenta),
         Ordering::Greater => style,
     }
 }

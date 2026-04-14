@@ -22,6 +22,6 @@ impl CommandBar {
             KeyAction::ToggleHelp.key_bindings_display()
         ))
         .centered()
-        .gray())
+        .dim())
     }
 }

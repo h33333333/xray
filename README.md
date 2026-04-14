@@ -22,6 +22,7 @@
 - ⛓️ Supports **size-based filtering**.
 - 🚀 Fast startup times due to optimized image parsing.
 - 🏡 Convenient and minimalistic UI.
+- 🎨 ANSI theme-aware colors that follow your terminal palette.
 - 📦 Works with **any OCI-compliant container image**.
 - ⚙️ No needless re-rendering of the UI: `xray` values your CPU cycles.
 
